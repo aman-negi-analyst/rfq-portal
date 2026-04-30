@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Savings Forecast{% endblock %}
+{% block topbar_title %}Savings Forecast{% endblock %}
+{% block topbar_sub %}Expected savings from pipeline RFQs based on historical data{% endblock %}
+{% block content %}
+
+<!-- Key Stats -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+  <div style="background:linear-gradient(135deg,#0a8a6e,#0ea882);border-radius:12px;padding:16px 20px;color:#fff">
+    <div style="font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Avg Historical Savings</div>
+    <div style="font-size:28px;font-weight:800">{{ avg_savings_pct }}%</div>
+    <div style="font-size:11px;opacity:.7;margin-top:4px">Based on {{ hist_count }} closed RFQs</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#c8cc2a,#a8af1e);border-radius:12px;padding:16px 20px;color:#1a1d23">
+    <div style="font-size:10px;opacity:.7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Total Historical Savings</div>
+    <div style="font-size:22px;font-weight:800">₹{{ '{:,.0f}'.format(total_historical_savings) }}</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#4f46e5,#6366f1);border-radius:12px;padding:16px 20px;color:#fff">
+    <div style="font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Pipeline RFQs</div>
+    <div style="font-size:28px;font-weight:800">{{ forecast|length }}</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#d97706,#f59e0b);border-radius:12px;padding:16px 20px;color:#fff">
+    <div style="font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Potential Savings</div>
+    <div style="font-size:22px;font-weight:800">₹{{ '{:,.0f}'.format(total_potential) }}</div>
+    <div style="font-size:11px;opacity:.8;margin-top:4px">If {{ avg_savings_pct }}% achieved</div>
+  </div>
+</div>
+
+<!-- Pipeline Forecast Table -->
+{% if forecast %}
+<div class="card" style="margin-bottom:20px">
+  <div class="card-header"><h3>🔮 Pipeline Forecast</h3></div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#f9fafb">
+        {% for h in ['RFQ','Subject','Zone','Status','Lanes','Guideline Cost','Expected Savings Rate','Expected Savings'] %}
+        <th style="padding:10px 14px;text-align:{% if loop.index<=3 %}left{% else %}center{% endif %};font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">{{ h }}</th>
+        {% endfor %}
+      </tr></thead>
+      <tbody>
+      {% for f in forecast %}
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:10px 14px"><span style="background:#eef2ff;color:#4f46e5;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">{{ f.rfq.rfq_id }}</span></td>
+        <td style="padding:10px 14px;font-weight:600">{{ f.rfq.subject }}</td>
+        <td style="padding:10px 14px;color:#6b7280">{{ f.rfq.zone or '—' }}</td>
+        <td style="padding:10px 14px;text-align:center">
+          {% set sc = {'Draft':'#6b7280','Pending':'#d97706','Approved':'#0891b2','Sent':'#7c3aed'} %}
+          <span style="background:{{ sc.get(f.rfq.status,'#6b7280') }}22;color:{{ sc.get(f.rfq.status,'#6b7280') }};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">{{ f.rfq.status }}</span>
+        </td>
+        <td style="padding:10px 14px;text-align:center;color:#6b7280">{{ f.lanes }}</td>
+        <td style="padding:10px 14px;text-align:center;font-weight:600">{% if f.guideline %}₹{{ '{:,.0f}'.format(f.guideline) }}{% else %}—{% endif %}</td>
+        <td style="padding:10px 14px;text-align:center">
+          <span style="background:#ecfdf5;color:#059669;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700">~{{ f.savings_pct }}%</span>
+        </td>
+        <td style="padding:10px 14px;text-align:center;font-weight:800;color:#059669">
+          {% if f.expected_savings %}₹{{ '{:,.0f}'.format(f.expected_savings) }}{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      <tr style="background:#f0fdf9">
+        <td colspan="6" style="padding:12px 14px;font-weight:700;text-align:right">Total Expected Savings:</td>
+        <td></td>
+        <td style="padding:12px 14px;text-align:center;font-weight:800;color:#059669;font-size:16px">₹{{ '{:,.0f}'.format(total_potential) }}</td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Historical Trend Chart -->
+{% if trend %}
+<div class="card">
+  <div class="card-header"><h3>📈 Historical Savings %</h3></div>
+  <div style="padding:16px 20px"><canvas id="trendChart" height="160"></canvas></div>
+</div>
+{% endif %}
+
+{% if not forecast and not trend %}
+<div class="card" style="padding:40px;text-align:center;color:#9ca3af">
+  <div style="font-size:36px;margin-bottom:10px">🔮</div>
+  <div style="font-weight:600;margin-bottom:6px">No data yet</div>
+  <div style="font-size:13px">Create and close some RFQs to see savings forecasts.</div>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if trend %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+new Chart(document.getElementById('trendChart'), {
+  type:'bar',
+  data:{
+    labels:{{ trend|map(attribute='rfq_id')|list|tojson }},
+    datasets:[{
+      label:'Savings %',
+      data:{{ trend|map(attribute='savings_pct')|list|tojson }},
+      backgroundColor: {{ trend|map(attribute='savings_pct')|list|tojson }}.map(v => v >= {{ avg_savings_pct }} ? '#059669' : '#f59e0b'),
+      borderRadius:6
+    }]
+  },
+  options:{responsive:true,plugins:{legend:{display:false}},scales:{
+    y:{beginAtZero:true,ticks:{callback:function(v){return v+'%'}},grid:{color:'#f3f4f6'}},
+    x:{grid:{display:false}}
+  }}
+});
+</script>
+{% endif %}
+{% endblock %}

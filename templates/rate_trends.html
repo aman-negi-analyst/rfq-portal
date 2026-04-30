@@ -1,0 +1,178 @@
+{% extends 'base.html' %}
+{% block title %}Rate Trends{% endblock %}
+{% block topbar_title %}Rate Trend Analysis{% endblock %}
+{% block topbar_sub %}Track how rates change across RFQs for each lane{% endblock %}
+
+{% block content %}
+<!-- Lane Selector -->
+<div class="card" style="margin-bottom:20px;padding:16px 20px">
+  <form method="GET" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <label style="font-weight:700;font-size:14px;color:#374151">Select Lane:</label>
+    <select name="lane" class="filter-select" style="min-width:280px;font-size:14px" onchange="this.form.submit()">
+      <option value="">-- Select a lane --</option>
+      {% for lane in lane_names %}
+      <option value="{{ lane }}" {% if selected_lane==lane %}selected{% endif %}>{{ lane }}</option>
+      {% endfor %}
+    </select>
+    {% if not lane_names %}
+    <span style="color:#9ca3af;font-size:13px">No lanes with quotes found yet.</span>
+    {% endif %}
+  </form>
+</div>
+
+{% if selected_lane and trend_data %}
+<!-- Summary Stats -->
+{% set all_bests = trend_data|map(attribute='best')|list %}
+{% set min_best = all_bests|min %}
+{% set max_best = all_bests|max %}
+{% set avg_best = (all_bests|sum / all_bests|length)|round|int %}
+
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+  <div style="background:#f0fdf9;border:1px solid #a7f3d0;border-radius:12px;padding:14px 16px;text-align:center">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#059669;margin-bottom:4px">Best Rate Ever</div>
+    <div style="font-size:22px;font-weight:800;color:#065f46">₹{{ '{:,.0f}'.format(min_best) }}</div>
+  </div>
+  <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:14px 16px;text-align:center">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#dc2626;margin-bottom:4px">Highest Rate</div>
+    <div style="font-size:22px;font-weight:800;color:#991b1b">₹{{ '{:,.0f}'.format(max_best) }}</div>
+  </div>
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px 16px;text-align:center">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#2563eb;margin-bottom:4px">Average L1 Rate</div>
+    <div style="font-size:22px;font-weight:800;color:#1d4ed8">₹{{ '{:,.0f}'.format(avg_best) }}</div>
+  </div>
+  <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;text-align:center">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px">Total RFQs</div>
+    <div style="font-size:22px;font-weight:800;color:#374151">{{ trend_data|length }}</div>
+  </div>
+</div>
+
+<!-- Chart -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-header"><h3>📈 Rate Trend — {{ selected_lane }}</h3></div>
+  <div style="padding:16px 20px"><canvas id="trendChart" height="160"></canvas></div>
+</div>
+
+<!-- Data Table -->
+<div class="card">
+  <div class="card-header"><h3>📊 RFQ-wise Rate Details</h3></div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="background:#f9fafb">
+          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">RFQ</th>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">Date</th>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">Zone</th>
+          <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">Guideline</th>
+          <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">L1 (Best)</th>
+          <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">Average</th>
+          <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">Highest</th>
+          <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">vs Guideline</th>
+          <th style="padding:10px 12px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">Quotes</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for d in trend_data %}
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:10px 16px">
+          <a href="{{ url_for('rfq.rfq_detail', rfq_id=d.rfq_obj.id) }}" style="color:#0a8a6e;font-weight:700;text-decoration:none">{{ d.rfq_id }}</a>
+        </td>
+        <td style="padding:10px 12px;color:#6b7280">{{ d.rfq_date }}</td>
+        <td style="padding:10px 12px;color:#6b7280">{{ d.zone }}</td>
+        <td style="padding:10px 12px;text-align:right;color:#9ca3af">{% if d.guideline %}₹{{ '{:,.0f}'.format(d.guideline) }}{% else %}—{% endif %}</td>
+        <td style="padding:10px 12px;text-align:right;font-weight:800;color:#059669">₹{{ '{:,.0f}'.format(d.best) }}</td>
+        <td style="padding:10px 12px;text-align:right;font-weight:600;color:#374151">₹{{ '{:,.0f}'.format(d.avg) }}</td>
+        <td style="padding:10px 12px;text-align:right;color:#dc2626">₹{{ '{:,.0f}'.format(d.worst) }}</td>
+        <td style="padding:10px 12px;text-align:right">
+          {% if d.guideline %}
+          {% set diff = d.best - d.guideline %}
+          {% if diff < 0 %}
+          <span style="color:#059669;font-weight:700">▼ ₹{{ '{:,.0f}'.format(diff|abs) }}</span>
+          {% elif diff > 0 %}
+          <span style="color:#dc2626;font-weight:700">▲ ₹{{ '{:,.0f}'.format(diff) }}</span>
+          {% else %}—{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td style="padding:10px 12px;text-align:center;color:#6b7280">{{ d.quotes }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% elif selected_lane %}
+<div class="card" style="padding:40px;text-align:center;color:var(--text-2)">
+  <div style="font-size:36px;margin-bottom:10px">📊</div>
+  <div style="font-weight:600;margin-bottom:6px">No quote data for "{{ selected_lane }}"</div>
+  <div style="font-size:13px">This lane has not received any quotes yet.</div>
+</div>
+{% else %}
+<div class="card" style="padding:40px;text-align:center;color:var(--text-2)">
+  <div style="font-size:36px;margin-bottom:10px">📈</div>
+  <div style="font-weight:600;margin-bottom:6px">Select a lane to view rate trends</div>
+  <div style="font-size:13px">Choose from the dropdown above to see how rates have changed over time.</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if trend_data %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+var ctx = document.getElementById('trendChart');
+if (ctx) {
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: {{ trend_data|map(attribute='rfq_id')|list|tojson }},
+      datasets: [
+        {
+          label: 'L1 (Best Rate)',
+          data: {{ trend_data|map(attribute='best')|list|tojson }},
+          borderColor: '#059669', backgroundColor: 'rgba(5,150,105,.1)',
+          borderWidth: 2.5, pointRadius: 5, pointBackgroundColor: '#059669', fill: true, tension: 0.3
+        },
+        {
+          label: 'Average Rate',
+          data: {{ trend_data|map(attribute='avg')|list|tojson }},
+          borderColor: '#2563eb', backgroundColor: 'transparent',
+          borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#2563eb', borderDash: [5,3], tension: 0.3
+        },
+        {% if trend_data[0].guideline %}
+        {
+          label: 'Guideline',
+          data: {{ trend_data|map(attribute='guideline')|list|tojson }},
+          borderColor: '#f59e0b', backgroundColor: 'transparent',
+          borderWidth: 1.5, pointRadius: 3, borderDash: [8,4], tension: 0
+        },
+        {% endif %}
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: function(c) {
+              return ' ' + c.dataset.label + ': ₹' + c.raw.toLocaleString('en-IN');
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: false,
+          ticks: {
+            callback: function(v) { return '₹' + v.toLocaleString('en-IN'); }
+          },
+          grid: { color: '#f3f4f6' }
+        },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+</script>
+{% endif %}
+{% endblock %}

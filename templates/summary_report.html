@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}Summary Report{% endblock %}
+{% block topbar_title %}Monthly / Quarterly Summary{% endblock %}
+{% block topbar_sub %}RFQ performance summary by period{% endblock %}
+{% block content %}
+
+<form method="GET" style="display:flex;gap:8px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
+  <div style="display:flex;gap:4px;background:#f3f4f6;padding:4px;border-radius:10px">
+    <a href="?period=monthly&year={{ year }}"
+       style="padding:6px 16px;border-radius:7px;font-size:13px;font-weight:700;text-decoration:none;background:{% if period=='monthly' %}#fff{% else %}transparent{% endif %};color:{% if period=='monthly' %}#0a8a6e{% else %}#6b7280{% endif %}">Monthly</a>
+    <a href="?period=quarterly&year={{ year }}"
+       style="padding:6px 16px;border-radius:7px;font-size:13px;font-weight:700;text-decoration:none;background:{% if period=='quarterly' %}#fff{% else %}transparent{% endif %};color:{% if period=='quarterly' %}#0a8a6e{% else %}#6b7280{% endif %}">Quarterly</a>
+  </div>
+  <select name="year" class="filter-select" onchange="this.form.submit()">
+    {% for y in years %}<option value="{{ y }}" {% if year==y|string %}selected{% endif %}>{{ y }}</option>{% endfor %}
+  </select>
+  <input type="hidden" name="period" value="{{ period }}">
+</form>
+
+<!-- Overall Totals -->
+{% set total_rfqs = summary|sum(attribute='total') %}
+{% set total_closed = summary|sum(attribute='closed') %}
+{% set total_savings = summary|sum(attribute='savings') %}
+{% set total_guideline = summary|sum(attribute='guideline') %}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+  {% for label,val,color,bg in [
+    ('Total RFQs', total_rfqs, '#0a8a6e', 'linear-gradient(135deg,#0a8a6e,#0ea882)'),
+    ('Closed', total_closed, '#fff', 'linear-gradient(135deg,#059669,#10b981)'),
+    ('Total Savings', '₹'+('{:,.0f}'.format(total_savings)), '#fff', 'linear-gradient(135deg,#c8cc2a,#a8af1e)'),
+    ('Savings %', (((total_savings/total_guideline)*100)|round(1)|string+'%') if total_guideline else '0%', '#fff', 'linear-gradient(135deg,#4f46e5,#6366f1)'),
+  ] %}
+  <div style="background:{{ bg }};border-radius:12px;padding:16px 20px;color:#fff">
+    <div style="font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">{{ label }}</div>
+    <div style="font-size:26px;font-weight:800;color:{% if color=='#fff' %}#fff{% else %}#fff{% endif %}">{{ val }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Period Table -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-header"><h3>📊 {{ period|capitalize }} Breakdown — {{ year }}</h3></div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="background:#f9fafb">
+          {% for h in ['Period','Total RFQs','Closed','Draft','Pending','Sent','Rejected','Quotes','Guideline','Savings','Savings %'] %}
+          <th style="padding:10px 14px;text-align:{% if loop.index==1 %}left{% else %}center{% endif %};font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">{{ h }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in summary %}
+      {% if row.total > 0 %}
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:10px 14px;font-weight:700;color:#0a8a6e">{{ row.label }}</td>
+        <td style="padding:10px 14px;text-align:center;font-weight:700">{{ row.total }}</td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:#ecfdf5;color:#059669;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700">{{ row.closed }}</span></td>
+        <td style="padding:10px 14px;text-align:center;color:#6b7280">{{ row.draft }}</td>
+        <td style="padding:10px 14px;text-align:center;color:#d97706">{{ row.pending }}</td>
+        <td style="padding:10px 14px;text-align:center;color:#7c3aed">{{ row.sent }}</td>
+        <td style="padding:10px 14px;text-align:center;color:#dc2626">{{ row.rejected }}</td>
+        <td style="padding:10px 14px;text-align:center;color:#6b7280">{{ row.quotes }}</td>
+        <td style="padding:10px 14px;text-align:center;color:#6b7280">{% if row.guideline %}₹{{ '{:,.0f}'.format(row.guideline) }}{% else %}—{% endif %}</td>
+        <td style="padding:10px 14px;text-align:center;font-weight:700;color:#059669">{% if row.savings %}₹{{ '{:,.0f}'.format(row.savings) }}{% else %}—{% endif %}</td>
+        <td style="padding:10px 14px;text-align:center">
+          {% if row.savings_pct > 0 %}
+          <span style="background:#ecfdf5;color:#059669;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700">{{ row.savings_pct }}%</span>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Chart -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+  <div class="card"><div class="card-header"><h3>📈 RFQ Volume</h3></div><div style="padding:16px 20px"><canvas id="volumeChart" height="200"></canvas></div></div>
+  <div class="card"><div class="card-header"><h3>💰 Savings Trend</h3></div><div style="padding:16px 20px"><canvas id="savingsChart" height="200"></canvas></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+var labels = {{ summary|selectattr('total','gt',0)|map(attribute='label')|list|tojson }};
+var volumes = {{ summary|selectattr('total','gt',0)|map(attribute='total')|list|tojson }};
+var savings = {{ summary|selectattr('total','gt',0)|map(attribute='savings')|list|tojson }};
+new Chart(document.getElementById('volumeChart'), {
+  type:'bar', data:{labels:labels, datasets:[{label:'RFQs',data:volumes,backgroundColor:'#0a8a6e',borderRadius:6}]},
+  options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}
+});
+new Chart(document.getElementById('savingsChart'), {
+  type:'line', data:{labels:labels, datasets:[{label:'Savings',data:savings,borderColor:'#c8cc2a',backgroundColor:'rgba(200,204,42,.1)',borderWidth:2.5,fill:true,tension:0.4,pointBackgroundColor:'#c8cc2a',pointRadius:4}]},
+  options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:function(v){return'₹'+v.toLocaleString('en-IN')}},grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}
+});
+</script>
+{% endblock %}

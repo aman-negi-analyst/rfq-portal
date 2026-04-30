@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Shadowfax RFQ Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body {
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  background: linear-gradient(135deg, #eef2ff 0%, #f0fdf4 50%, #eff6ff 100%);
+}
+/* Left panel */
+.left-panel {
+  width: 420px;
+  flex-shrink: 0;
+  background: linear-gradient(145deg, #077a60 0%, #0a8a6e 50%, #0ea882 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 48px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.left-panel::before {
+  content: '';
+  position: absolute;
+  top: -80px; right: -80px;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.08);
+}
+.left-panel::after {
+  content: '';
+  position: absolute;
+  bottom: -60px; left: -60px;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.06);
+}
+.left-logo {
+  width: 64px; height: 64px;
+  background: rgba(255,255,255,.2);
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 800;
+  margin-bottom: 24px;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.3);
+}
+.left-panel h1 { font-size: 28px; font-weight: 800; margin-bottom: 12px; line-height: 1.2; }
+.left-panel p  { font-size: 14px; opacity: .8; line-height: 1.7; }
+.feature-list  { margin-top: 36px; display: flex; flex-direction: column; gap: 14px; width: 100%; }
+.feature-item  { display: flex; align-items: center; gap: 12px; font-size: 13px; opacity: .9; }
+.feature-icon  {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: rgba(255,255,255,.15);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
+}
+
+/* Right panel */
+.right-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+}
+.auth-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 44px 40px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.10);
+  border: 1px solid #e5e7eb;
+}
+.auth-card h2 { font-size: 24px; font-weight: 800; color: #111827; margin-bottom: 6px; }
+.auth-card .subtitle { font-size: 14px; color: #6b7280; margin-bottom: 32px; }
+
+.form-group { margin-bottom: 18px; }
+.form-group label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+.form-group input, .form-group select {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  background: #fafafa;
+  color: #111827;
+}
+.form-group input:focus, .form-group select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+  background: #fff;
+}
+.btn-auth {
+  width: 100%;
+  padding: 13px;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(99,102,241,.35);
+  transition: transform .2s, box-shadow .2s;
+  margin-top: 6px;
+}
+.btn-auth:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,.45); }
+
+.divider {
+  display: flex; align-items: center; gap: 12px;
+  margin: 24px 0; font-size: 12px; color: #9ca3af;
+}
+.divider::before, .divider::after {
+  content: ''; flex: 1; height: 1px; background: #e5e7eb;
+}
+
+.auth-footer {
+  text-align: center;
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 24px;
+}
+.auth-footer a {
+  color: #6366f1;
+  font-weight: 600;
+  text-decoration: none;
+}
+.auth-footer a:hover { text-decoration: underline; }
+
+.error-box {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 20px;
+  display: flex; align-items: center; gap: 8px;
+}
+.demo-box {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 12px;
+  color: #1d4ed8;
+  margin-top: 20px;
+}
+.demo-box strong { display: block; font-size: 13px; margin-bottom: 8px; color: #1e40af; }
+.demo-row {
+  display: flex; justify-content: space-between;
+  padding: 4px 0; border-bottom: 1px solid #dbeafe; font-size: 12px;
+}
+.demo-row:last-child { border-bottom: none; }
+.demo-row span:last-child { font-weight: 600; }
+
+@media (max-width: 768px) {
+  .left-panel { display: none; }
+  .right-panel { padding: 24px 16px; }
+  .auth-card { padding: 32px 24px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Left Panel -->
+<div class="left-panel">
+  <div style="position:relative;z-index:1;width:100%">
+    <div class="left-logo">R</div>
+    <h1>Shadowfax RFQ Portal</h1>
+    <p>Streamline your procurement process with smart RFQ management, vendor tracking and automated bidding.</p>
+    <div class="feature-list">
+      <div class="feature-item">
+        <div class="feature-icon">📋</div>
+        <span>Create & manage RFQs with full approval workflow</span>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">🏢</div>
+        <span>1200+ vendor master with smart region matching</span>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">📊</div>
+        <span>L1 / L2 / L3 quote comparison & savings tracking</span>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">📧</div>
+        <span>Auto email vendors when RFQ is approved</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Right Panel -->
+<div class="right-panel">
+  <div class="auth-card">
+    <h2>Welcome back 👋</h2>
+    <p class="subtitle">Sign in to your Shadowfax RFQ Portal account</p>
+
+    {% if error %}
+    <div class="error-box">⚠️ {{ error }}</div>
+    {% endif %}
+
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" name="email" placeholder="you@company.com" required autofocus/>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Enter your password" required/>
+      </div>
+      <button type="submit" class="btn-auth">Sign In →</button>
+    </form>
+
+    <div class="auth-footer" style="margin-top:10px">
+      Forgot your password? <a href="{{ url_for('auth.forgot_password') }}">Reset it</a>
+    </div>
+
+
+  </div>
+</div>
+
+</body>
+</html>

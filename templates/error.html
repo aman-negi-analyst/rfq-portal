@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>{{ code }} — Shadowfax RFQ Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f0fdf9 0%,#e6f7f4 50%,#f0fdf4 100%)}
+.card{background:#fff;border-radius:20px;padding:48px 40px;max-width:480px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.10);border:1px solid #e5e7eb}
+.icon{font-size:56px;margin-bottom:16px}
+.code{font-size:72px;font-weight:800;color:#0a8a6e;line-height:1;margin-bottom:8px}
+.title{font-size:22px;font-weight:700;color:#111827;margin-bottom:10px}
+.msg{font-size:14px;color:#6b7280;line-height:1.7;margin-bottom:28px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:12px 24px;background:#0a8a6e;color:#fff;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;box-shadow:0 4px 12px rgba(10,138,110,.3);transition:all .2s}
+.btn:hover{background:#077a60;transform:translateY(-1px)}
+.btn-ghost{background:#f3f4f6;color:#374151;box-shadow:none;margin-left:8px}
+.btn-ghost:hover{background:#e5e7eb;transform:translateY(-1px)}
+.logo{margin-bottom:24px}
+.logo img{height:36px;object-fit:contain}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <img src="/static/shadowfax_logo.jpg" alt="Shadowfax">
+  </div>
+  {% if code == 404 %}
+  <div class="icon">🔍</div>
+  <div class="code">404</div>
+  <div class="title">Page Not Found</div>
+  <div class="msg">The page you're looking for doesn't exist or may have been moved. Please check the URL or go back to the dashboard.</div>
+  {% elif code == 403 %}
+  <div class="icon">🔒</div>
+  <div class="code">403</div>
+  <div class="title">Access Denied</div>
+  <div class="msg">You don't have permission to access this page. Please contact your Admin if you think this is a mistake.</div>
+  {% elif code == 500 %}
+  <div class="icon">⚠️</div>
+  <div class="code">500</div>
+  <div class="title">Something Went Wrong</div>
+  <div class="msg">An unexpected error occurred on our end. Our team has been notified. Please try again or go back to the dashboard.</div>
+  {% else %}
+  <div class="icon">😕</div>
+  <div class="code">{{ code }}</div>
+  <div class="title">{{ title or 'Unexpected Error' }}</div>
+  <div class="msg">{{ description or 'Something went wrong. Please try again.' }}</div>
+  {% endif %}
+  <div>
+    <a href="/dashboard" class="btn">🏠 Go to Dashboard</a>
+    <a href="javascript:history.back()" class="btn btn-ghost">← Go Back</a>
+  </div>
+</div>
+</body>
+</html>

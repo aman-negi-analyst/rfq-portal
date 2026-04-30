@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+{% block title %}RFQ Management{% endblock %}
+{% block topbar_title %}RFQ Management{% endblock %}
+{% block topbar_sub %}{{ rfqs|length }} RFQ{{ 's' if rfqs|length != 1 }} found{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('rfq.create_rfq') }}" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#0a8a6e;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;box-shadow:0 2px 8px rgba(10,138,110,.3)">
+  <svg style="width:14px;height:14px" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
+  New RFQ
+</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Status Filter Tabs ── -->
+<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+  {% set statuses = [('', 'All', total_count), ('Draft', 'Draft', draft_count), ('Pending', 'Pending', pending_count), ('Approved', 'Approved', approved_count), ('Sent', 'Sent', sent_count), ('Closed', 'Closed', closed_count), ('Rejected', 'Rejected', rejected_count)] %}
+  {% set status_colors = {'Draft':'#6b7280','Pending':'#d97706','Approved':'#0891b2','Sent':'#7c3aed','Closed':'#059669','Rejected':'#dc2626'} %}
+  {% for val, label, count in statuses %}
+  <a href="{{ url_for('rfq.rfq_list', status=val, zone=zone, search=search) }}"
+     style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;border:1.5px solid {% if status==val %}{{ status_colors.get(val,'#0a8a6e') }}{% else %}#e5e7eb{% endif %};background:{% if status==val %}{{ status_colors.get(val,'#0a8a6e') }}{% else %}#fff{% endif %};color:{% if status==val %}#fff{% else %}#4b5563{% endif %};transition:all .15s">
+    {{ label }}
+    <span style="background:{% if status==val %}rgba(255,255,255,.3){% else %}#f3f4f6{% endif %};border-radius:99px;padding:1px 7px;font-size:11px">{{ count }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+<!-- ── Search + Filters + Export ── -->
+<form method="GET">
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+  <div class="search-wrap" style="flex:1;min-width:200px">
+    <span class="search-icon">⌕</span>
+    <input type="text" name="search" value="{{ search }}" placeholder="Search by subject, RFQ ID, zone..."/>
+  </div>
+  <input type="hidden" name="status" value="{{ status }}">
+  <select name="zone" class="filter-select" onchange="this.form.submit()">
+    <option value="">All Zones</option>
+    {% for z in ['North','South','East','West','Central','National'] %}
+    <option value="{{ z }}" {% if zone==z %}selected{% endif %}>{{ z }}</option>
+    {% endfor %}
+  </select>
+  <select name="vertical" class="filter-select" onchange="this.form.submit()">
+    <option value="">All Verticals</option>
+    {% for v in ['National','Zonal','Tertiary','Intracity Fixed','Intracity Fixed+Variable'] %}
+    <option value="{{ v }}" {% if vertical==v %}selected{% endif %}>{{ v }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+  {% if search or zone or vertical %}<a href="{{ url_for('rfq.rfq_list', status=status) }}" class="btn btn-ghost btn-sm">✕ Clear</a>{% endif %}
+
+  <div style="margin-left:auto;display:flex;gap:6px">
+    <a href="{{ url_for('rfq.export_rfqs_excel', search=search, zone=zone, status=status) }}" class="btn btn-secondary btn-sm">⬇ Export</a>
+    <a href="{{ url_for('rfq.download_rfq_template') }}" class="btn btn-ghost btn-sm" title="Download lane import template">📥 Template</a>
+  </div>
+</div>
+</form>
+
+<!-- ── RFQ Cards ── -->
+{% if rfqs %}
+<div style="display:flex;flex-direction:column;gap:12px">
+  {% for r in rfqs %}
+  {% set sc = {'Draft':'#6b7280','Pending':'#d97706','Approved':'#0891b2','Sent':'#7c3aed','Closed':'#059669','Rejected':'#dc2626'} %}
+  {% set status_color = sc.get(r.status, '#6b7280') %}
+  {% set quote_count = r.quotes|length if r.quotes else 0 %}
+  {% set is_overdue = r.deadline and r.deadline < today and r.status in ['Sent','Approved'] %}
+
+  <div style="background:#fff;border:1px solid {% if is_overdue %}#fca5a5{% else %}#e5e7eb{% endif %};border-left:4px solid {{ status_color }};border-radius:12px;padding:16px 20px;transition:box-shadow .15s"
+       onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.08)'"
+       onmouseout="this.style.boxShadow='none'">
+
+    <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+
+      <!-- Left: Main Info -->
+      <div style="flex:1;min-width:240px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <span style="background:#f3f4f6;color:#374151;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">{{ r.rfq_id }}</span>
+          <span style="background:{{ status_color }}22;color:{{ status_color }};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">{{ r.status }}</span>
+          {% if r.vertical %}<span style="background:#eef2ff;color:#4f46e5;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600">{{ r.vertical }}</span>{% endif %}
+          {% if is_overdue %}<span style="background:#fef2f2;color:#dc2626;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">⚠️ Overdue</span>{% endif %}
+          {% if r.deadline_closed %}<span style="background:#fef2f2;color:#dc2626;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">🔒 Deadline Closed</span>{% endif %}
+        </div>
+
+        <a href="{{ url_for('rfq.rfq_detail', rfq_id=r.id) }}"
+           style="font-size:15px;font-weight:700;color:#111827;text-decoration:none;display:block;margin-bottom:6px;line-height:1.3"
+           onmouseover="this.style.color='#0a8a6e'"
+           onmouseout="this.style.color='#111827'">
+          {{ r.subject }}
+        </a>
+
+        <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#6b7280">
+          {% if r.zone %}<span>🗺️ {{ r.zone }}</span>{% endif %}
+          {% if r.lanes %}<span>📍 {{ r.lanes|length }} Lane{{ 's' if r.lanes|length != 1 }}</span>{% endif %}
+          {% if r.deadline %}
+          <span style="color:{% if is_overdue %}#dc2626{% elif (r.deadline - today).days <= 3 %}#d97706{% else %}#6b7280{% endif %}">
+            📅 {{ r.deadline.strftime('%d %b %Y') }}
+            {% if r.status in ['Sent','Approved'] and not r.deadline_closed %}
+              {% set days = (r.deadline - today).days %}
+              {% if days == 0 %}<strong style="color:#dc2626"> — Today!</strong>
+              {% elif days == 1 %}<strong style="color:#dc2626"> — Tomorrow</strong>
+              {% elif days > 0 and days <= 3 %}<strong style="color:#d97706"> — {{ days }} days left</strong>
+              {% elif days < 0 %}<strong style="color:#dc2626"> — {{ days|abs }} days ago</strong>
+              {% endif %}
+            {% endif %}
+          </span>
+          {% endif %}
+          <span>👤 {{ r.created_by }}</span>
+          {% if r.created_at %}<span>🕐 {{ r.created_at.strftime('%d %b %Y') }}</span>{% endif %}
+        </div>
+      </div>
+
+      <!-- Middle: Stats -->
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <!-- Lanes guideline -->
+        {% set total_gc = namespace(val=0) %}
+        {% for l in r.lanes %}{% set total_gc.val = total_gc.val + (l.guideline_cost or 0) %}{% endfor %}
+        {% if total_gc.val > 0 %}
+        <div style="text-align:center;padding:8px 14px;background:#f9fafb;border-radius:8px;min-width:90px">
+          <div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Guideline</div>
+          <div style="font-size:14px;font-weight:700;color:#374151">₹{{ '{:,.0f}'.format(total_gc.val) }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Quote count -->
+        {% if quote_count > 0 %}
+        <div style="text-align:center;padding:8px 14px;background:#f0fdf9;border-radius:8px;min-width:80px">
+          <div style="font-size:10px;color:#059669;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Quotes</div>
+          <div style="font-size:14px;font-weight:700;color:#059669">{{ quote_count }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Winner if closed -->
+        {% if r.status == 'Closed' and r.winner_vendor %}
+        <div style="text-align:center;padding:8px 14px;background:#ecfdf5;border-radius:8px;min-width:100px">
+          <div style="font-size:10px;color:#059669;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Winner</div>
+          <div style="font-size:12px;font-weight:700;color:#065f46">{{ r.winner_vendor[:15] }}{% if r.winner_vendor|length > 15 %}...{% endif %}</div>
+        </div>
+        {% endif %}
+
+        <!-- Round 2 status -->
+        {% if r.round2_sent %}
+        <div style="text-align:center;padding:8px 14px;background:#fffbeb;border-radius:8px">
+          <div style="font-size:10px;color:#d97706;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Round</div>
+          <div style="font-size:14px;font-weight:700;color:#d97706">R2 ✅</div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Right: Actions -->
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0">
+        <a href="{{ url_for('rfq.rfq_detail', rfq_id=r.id) }}" class="btn btn-secondary btn-sm" style="width:80px;text-align:center">👁 View</a>
+        {% if r.status == 'Draft' %}
+        <a href="{{ url_for('rfq.create_rfq') }}?edit={{ r.id }}" class="btn btn-ghost btn-sm" style="width:80px;text-align:center">✏️ Edit</a>
+        {% endif %}
+        {% if r.status in ['Sent','Closed'] %}
+        <a href="{{ url_for('results.results') }}" class="btn btn-ghost btn-sm" style="width:80px;text-align:center;font-size:11px">📊 Results</a>
+        {% endif %}
+      </div>
+
+    </div>
+
+    <!-- Progress bar for flow status -->
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid #f3f4f6">
+      {% set steps = [('Draft','#6b7280'), ('Pending','#d97706'), ('Approved','#0891b2'), ('Sent','#7c3aed'), ('Closed','#059669')] %}
+      {% set step_names = ['Draft','Pending','Approved','Sent','Closed'] %}
+      {% set current_idx = step_names.index(r.status) if r.status in step_names else 0 %}
+      <div style="display:flex;align-items:center;gap:0">
+        {% for step, color in steps %}
+        {% set idx = loop.index0 %}
+        {% set is_done = idx <= current_idx and r.status != 'Rejected' %}
+        {% set is_current = idx == current_idx and r.status != 'Rejected' %}
+        <div style="display:flex;align-items:center;flex:1">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1">
+            <div style="width:{% if is_current %}12px{% else %}8px{% endif %};height:{% if is_current %}12px{% else %}8px{% endif %};border-radius:50%;background:{% if is_done %}{{ color }}{% else %}#e5e7eb{% endif %};transition:all .2s{% if is_current %};box-shadow:0 0 0 3px {{ color }}33{% endif %}"></div>
+            <span style="font-size:9px;font-weight:{% if is_current %}700{% else %}400{% endif %};color:{% if is_done %}{{ color }}{% else %}#9ca3af{% endif %}">{{ step }}</span>
+          </div>
+          {% if not loop.last %}
+          <div style="height:2px;flex:1;background:{% if idx < current_idx and r.status != 'Rejected' %}{{ color }}{% else %}#e5e7eb{% endif %};margin-bottom:12px"></div>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% if r.status == 'Rejected' %}
+        <span style="font-size:11px;color:#dc2626;font-weight:600;margin-left:8px">❌ Rejected</span>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="card" style="padding:48px;text-align:center">
+  <div style="font-size:40px;margin-bottom:12px">📄</div>
+  <div style="font-weight:600;font-size:16px;color:#374151;margin-bottom:8px">No RFQs found</div>
+  <div style="color:#6b7280;margin-bottom:20px;font-size:13px">
+    {% if search or zone or status %}Try clearing your filters or search again{% else %}Get started by creating your first RFQ{% endif %}
+  </div>
+  {% if not search and not zone and not status %}
+  <a href="{{ url_for('rfq.create_rfq') }}" class="btn btn-primary">+ Create First RFQ</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

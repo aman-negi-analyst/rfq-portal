@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Register — Shadowfax RFQ Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body {
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  background: linear-gradient(135deg, #eef2ff 0%, #f0fdf4 50%, #eff6ff 100%);
+}
+.left-panel {
+  width: 420px;
+  flex-shrink: 0;
+  background: linear-gradient(145deg, #077a60 0%, #0a8a6e 50%, #0ea882 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 48px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.left-panel::before {
+  content: '';
+  position: absolute;
+  top: -80px; right: -80px;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.08);
+}
+.left-panel::after {
+  content: '';
+  position: absolute;
+  bottom: -60px; left: -60px;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.06);
+}
+.left-logo {
+  width: 64px; height: 64px;
+  background: rgba(255,255,255,.2);
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 800;
+  margin-bottom: 24px;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.3);
+}
+.left-panel h1 { font-size: 28px; font-weight: 800; margin-bottom: 12px; line-height: 1.2; }
+.left-panel p  { font-size: 14px; opacity: .85; line-height: 1.7; }
+.steps-list { margin-top: 36px; display: flex; flex-direction: column; gap: 18px; width: 100%; }
+.step-item { display: flex; align-items: flex-start; gap: 14px; }
+.step-num {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(255,255,255,.25);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,.4);
+}
+.step-item .step-text { font-size: 13px; opacity: .9; line-height: 1.5; padding-top: 4px; }
+
+.right-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+}
+.auth-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 44px 40px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.10);
+  border: 1px solid #e5e7eb;
+}
+.auth-card h2 { font-size: 24px; font-weight: 800; color: #111827; margin-bottom: 6px; }
+.auth-card .subtitle { font-size: 14px; color: #6b7280; margin-bottom: 28px; }
+
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+.form-group input, .form-group select {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  background: #fafafa;
+  color: #111827;
+}
+.form-group input:focus, .form-group select:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16,185,129,.12);
+  background: #fff;
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+.btn-auth {
+  width: 100%;
+  padding: 13px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(16,185,129,.35);
+  transition: transform .2s, box-shadow .2s;
+  margin-top: 6px;
+}
+.btn-auth:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(16,185,129,.45); }
+
+.auth-footer {
+  text-align: center;
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 22px;
+}
+.auth-footer a {
+  color: #6366f1;
+  font-weight: 600;
+  text-decoration: none;
+}
+.auth-footer a:hover { text-decoration: underline; }
+
+.error-box {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 20px;
+  display: flex; align-items: center; gap: 8px;
+}
+.success-box {
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 20px;
+  display: flex; align-items: center; gap: 8px;
+}
+.role-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 6px;
+}
+.role-card {
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .15s;
+}
+.role-card:hover { border-color: #10b981; background: #f0fdf4; }
+.role-card.selected { border-color: #10b981; background: #ecfdf5; }
+.role-card .role-icon { font-size: 20px; margin-bottom: 4px; }
+.role-card .role-name { font-size: 12px; font-weight: 600; color: #374151; }
+.role-card .role-desc { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+
+@media (max-width: 768px) {
+  .left-panel { display: none; }
+  .right-panel { padding: 24px 16px; }
+  .auth-card { padding: 32px 24px; }
+  .form-row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Left Panel -->
+<div class="left-panel">
+  <div style="position:relative;z-index:1;width:100%">
+    <div class="left-logo">R</div>
+    <h1>Join Shadowfax RFQ Portal</h1>
+    <p>Create your account and start managing procurement requests for your team.</p>
+    <div class="steps-list">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-text">Fill in your details to create your account</div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-text">Login and start creating or approving RFQs immediately</div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-text">Collaborate with your team on vendor quotes and comparisons</div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">4</div>
+        <div class="step-text">Track savings and close RFQs with full audit trail</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Right Panel -->
+<div class="right-panel">
+  <div class="auth-card">
+    <h2>Create Account ✨</h2>
+    <p class="subtitle">Fill in your details to get started</p>
+
+    {% if error %}
+    <div class="error-box">⚠️ {{ error }}</div>
+    {% endif %}
+
+    {% if success %}
+    <div class="success-box">
+      ✅ {{ success }} <a href="{{ url_for('auth.login') }}" style="color:#059669;font-weight:700;margin-left:4px">Login now →</a>
+    </div>
+    {% endif %}
+
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input type="text" name="name" placeholder="Priya Sharma" required/>
+        </div>
+        <div class="form-group">
+          <label>Email Address *</label>
+          <input type="email" name="email" placeholder="priya@company.com" required/>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Password *</label>
+          <input type="password" name="password" placeholder="Min. 6 characters" required minlength="6"/>
+        </div>
+        <div class="form-group">
+          <label>Confirm Password *</label>
+          <input type="password" name="confirm_password" placeholder="Repeat password" required/>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <!-- Role is set to User by default — Admin can promote from User Management -->
+        <input type="hidden" name="role" value="User"/>
+      </div>
+
+      <button type="submit" class="btn-auth">Create Account →</button>
+    </form>
+
+    <div class="auth-footer">
+      Already have an account? <a href="{{ url_for('auth.login') }}">Sign in</a>
+    </div>
+  </div>
+</div>
+
+<script>
+
+</script>
+</body>
+</html>

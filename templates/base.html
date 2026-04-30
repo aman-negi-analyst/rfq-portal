@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>{% block title %}Shadowfax RFQ Portal{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div style="padding:16px 20px 12px;border-bottom:1px solid #e5e7eb">
+      <img src="{{ url_for('static', filename='shadowfax_logo.jpg') }}"
+           alt="Shadowfax" style="width:100%;height:46px;object-fit:contain;object-position:left"/>
+      <div style="font-size:10px;color:#9ca3af;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin-top:6px">
+        RFQ Portal
+      </div>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-label">Main</div>
+      <a href="{{ url_for('auth.dashboard') }}" class="nav-item {% if request.endpoint=='dashboard' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h5a1 1 0 011 1v5a1 1 0 01-1 1H4a1 1 0 01-1-1v-5zm9 0a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-5z"/></svg>
+        Dashboard
+      </a>
+      <div class="nav-section-label">RFQ</div>
+      <a href="{{ url_for('rfq.create_rfq') }}" class="nav-item {% if request.endpoint=='create_rfq' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
+        Create RFQ
+      </a>
+      <a href="{{ url_for('rfq.rfq_list') }}" class="nav-item {% if request.endpoint in ['rfq_list','rfq_detail'] %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        RFQ Management
+      </a>
+      <a href="{{ url_for('rfq.approvals') }}" class="nav-item {% if request.endpoint=='approvals' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+        Approvals
+        {% if pending_count > 0 %}<span class="nav-badge">{{ pending_count }}</span>{% endif %}
+      </a>
+      <a href="{{ url_for('results.results') }}" class="nav-item {% if request.endpoint=='results' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg>
+        RFQ Results
+      </a>
+      <div class="nav-section-label">Masters</div>
+      <a href="{{ url_for('vendors.vendors') }}" class="nav-item {% if request.endpoint=='vendors' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"/></svg>
+        Vendor Master
+      </a>
+      <div class="nav-section-label">Reports</div>
+      <a href="{{ url_for('reports.vendor_scorecard') }}" class="nav-item {% if request.endpoint=='vendor_scorecard' %}active{% endif %}">
+        <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Vendor Scorecard
+      </a>
+      <a href="{{ url_for('reports.savings_report') }}" class="nav-item {% if request.endpoint=='savings_report' %}active{% endif %}">
+        <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Savings Report
+      </a>
+      <a href="{{ url_for('reports.round_comparison') }}" class="nav-item {% if request.endpoint=='round_comparison' %}active{% endif %}">
+        <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+        Round Comparison
+      </a>
+      <a href="{{ url_for('reports.rate_trends') }}" class="nav-item {% if request.endpoint=='rate_trends' %}active{% endif %}">
+        <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        Rate Trends
+      </a>
+      <a href="{{ url_for('admin.email_logs') }}" class="nav-item {% if request.endpoint=='email_logs' %}active{% endif %}">
+        <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        Email Logs
+      </a>
+      <a href="{{ url_for('reports.summary_report') }}" class="nav-item {% if request.endpoint=='summary_report' %}active{% endif %}">
+        <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Summary Report
+      </a>
+      <a href="{{ url_for('reports.vendor_participation') }}" class="nav-item {% if request.endpoint=='vendor_participation' %}active{% endif %}">
+        <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
+        Vendor Participation
+      </a>
+
+      <a href="{{ url_for('reports.lane_performance') }}" class="nav-item {% if request.endpoint=='lane_performance' %}active{% endif %}">
+        <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+        Lane Performance
+      </a>
+      {% if current_user.role == 'Admin' %}
+      <a href="{{ url_for('admin.full_backup') }}" class="nav-item">
+        <svg class="nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Full Backup
+      </a>
+      {% endif %}
+      <div class="nav-section-label">Admin</div>
+      {% if current_user and current_user.role == 'Admin' %}
+      <a href="{{ url_for('admin.user_list') }}" class="nav-item {% if request.endpoint=='user_list' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>
+        User Management
+      </a>
+      {% endif %}
+      <a href="{{ url_for('admin.notifications') }}" class="nav-item {% if request.endpoint=='notifications' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/></svg>
+        Notifications
+        {% if unread > 0 %}<span class="nav-badge">{{ unread }}</span>{% endif %}
+      </a>
+      <a href="{{ url_for('admin.settings') }}" class="nav-item {% if request.endpoint=='settings' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+        Settings
+      </a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-chip" onclick="toggleLogoutMenu()" id="user-chip">
+        <div class="user-avatar">{{ current_user.name[0]|upper if current_user else 'U' }}</div>
+        <div class="user-info">
+          <div class="user-name">{{ current_user.name if current_user else '' }}</div>
+          <div class="user-role">{{ current_user.role if current_user else '' }}</div>
+        </div>
+        <svg style="width:14px;height:14px;color:var(--text-2);flex-shrink:0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+      </div>
+    </div>
+  </nav>
+
+  <!-- LOGOUT MENU -->
+  <div class="logout-menu" id="logout-menu">
+    <div class="logout-email">{{ current_user.email if current_user else '' }}</div>
+    <div style="padding:6px">
+      <a href="{{ url_for('admin.profile') }}" class="logout-btn-item" style="color:var(--text);display:block;padding:8px 10px;font-size:13px;border-radius:6px;text-decoration:none" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+        👤 My Profile
+      </a>
+      <a href="{{ url_for('auth.logout') }}" class="logout-btn-item">Sign Out</a>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <main id="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title" id="topbar-title">{% block topbar_title %}{% endblock %}</div>
+        <div class="topbar-sub">{% block topbar_sub %}{% endblock %}</div>
+      </div>
+      <div class="topbar-right">
+        {% block topbar_actions %}{% endblock %}
+        <a href="{{ url_for('admin.notifications') }}" class="topbar-notif" title="Notifications">
+          <svg viewBox="0 0 20 20" fill="currentColor" style="width:16px;height:16px"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/></svg>
+          {% if unread > 0 %}<span class="badge-dot"></span>{% endif %}
+        </a>
+      </div>
+    </div>
+    <div class="content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for cat,msg in messages %}
+          <div class="alert alert-{{ cat }}" style="position:relative">
+            {{ msg }}
+            <button onclick="this.parentElement.remove()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:18px;cursor:pointer;opacity:.6;line-height:1">×</button>
+          </div>
+        {% endfor %}{% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+<div id="toast-container"></div>
+<script>
+function toggleLogoutMenu(){document.getElementById('logout-menu').classList.toggle('open');}
+document.addEventListener('click',function(e){var m=document.getElementById('logout-menu'),c=document.getElementById('user-chip');if(m&&c&&!c.contains(e.target)&&!m.contains(e.target))m.classList.remove('open');});
+function toast(msg,type='default'){const c=document.getElementById('toast-container');const t=document.createElement('div');t.className='toast '+type;const icons={success:'✓',error:'✕',warning:'⚠',default:'ℹ'};t.innerHTML=`<span>${icons[type]||'ℹ'}</span> ${msg}`;c.appendChild(t);setTimeout(()=>t.style.opacity='0',2800);setTimeout(()=>t.remove(),3200);}
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');});});
+function confirmAction(msg,formId){if(confirm(msg)){document.getElementById(formId).submit();}}
+document.querySelectorAll('.alert').forEach(function(el){
+  setTimeout(function(){
+    el.style.transition='opacity .4s,max-height .4s,margin .4s,padding .4s';
+    el.style.opacity='0';el.style.maxHeight='0';
+    el.style.overflow='hidden';el.style.marginBottom='0';el.style.padding='0';
+    setTimeout(function(){el.remove();},450);
+  },5000);
+});
+</script>
+{% block scripts %}{% endblock %}
+<!-- Session Timeout Warning -->
+<div id="session-warning" style="display:none;position:fixed;bottom:20px;right:20px;background:#1a1d23;color:#fff;border-radius:14px;padding:16px 20px;box-shadow:0 8px 32px rgba(0,0,0,.3);z-index:9999;max-width:320px;border-left:4px solid #f59e0b">
+  <div style="display:flex;align-items:flex-start;gap:10px">
+    <span style="font-size:20px;flex-shrink:0">⏰</span>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px">Session Expiring Soon</div>
+      <div style="font-size:12px;color:#9ca3af;margin-bottom:12px">Your session will expire in <span id="session-countdown" style="color:#f59e0b;font-weight:700">2:00</span>. Save your work.</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="extendSession()" style="background:#0a8a6e;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">🔄 Stay Logged In</button>
+        <button onclick="document.getElementById('session-warning').style.display='none'" style="background:rgba(255,255,255,.1);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;cursor:pointer">Dismiss</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Session timeout warning — warn 2 minutes before 30 min expiry
+var SESSION_DURATION = 30 * 60; // 30 minutes
+var WARNING_BEFORE   = 2 * 60;  // warn 2 minutes before
+var sessionTimer     = SESSION_DURATION;
+var warningShown     = false;
+var countdownInterval;
+
+function resetSessionTimer() {
+  sessionTimer = SESSION_DURATION;
+  warningShown = false;
+  document.getElementById('session-warning').style.display = 'none';
+  if (countdownInterval) clearInterval(countdownInterval);
+}
+
+function extendSession() {
+  fetch('/ping', {method:'POST', credentials:'same-origin'})
+    .then(function() { resetSessionTimer(); })
+    .catch(function() { window.location.href = '/login'; });
+}
+
+setInterval(function() {
+  sessionTimer--;
+  if (sessionTimer <= WARNING_BEFORE && !warningShown) {
+    warningShown = true;
+    document.getElementById('session-warning').style.display = 'block';
+    var countdown = WARNING_BEFORE;
+    countdownInterval = setInterval(function() {
+      countdown--;
+      var m = Math.floor(countdown / 60);
+      var s = countdown % 60;
+      var el = document.getElementById('session-countdown');
+      if (el) el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      if (countdown <= 0) {
+        clearInterval(countdownInterval);
+        window.location.href = '/login?timeout=1';
+      }
+    }, 1000);
+  }
+}, 1000);
+
+// Reset timer on any user activity
+['click','keypress','mousemove','scroll'].forEach(function(evt) {
+  document.addEventListener(evt, resetSessionTimer, {passive: true});
+});
+</script>
+
+<script>
+// CSRF helper — attach token to all fetch/XHR requests automatically
+const _csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+const _origFetch = window.fetch;
+window.fetch = function(url, opts = {}) {
+  if (typeof url === 'string' && !url.startsWith('http') && _csrfToken) {
+    opts.headers = Object.assign({'X-CSRFToken': _csrfToken}, opts.headers || {});
+  }
+  return _origFetch(url, opts);
+};
+</script>
+</body>
+</html>

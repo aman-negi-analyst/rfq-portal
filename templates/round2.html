@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}Round 2 — {{ rfq.rfq_id }}{% endblock %}
+{% block topbar_title %}Round 2 Negotiation{% endblock %}
+{% block topbar_sub %}Set target rates and send revised quote request{% endblock %}
+
+{% block content %}
+<div style="max-width:800px;margin:0 auto">
+
+  <!-- Header -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-body" style="padding:20px 24px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="background:#eef2ff;color:#4f46e5;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700">{{ rfq.rfq_id }}</span>
+        <div>
+          <div style="font-size:16px;font-weight:700">{{ rfq.subject }}</div>
+          <div style="font-size:12px;color:var(--text-2);margin-top:2px">Zone: {{ rfq.zone or '—' }} · {{ rfq.lanes|length }} Lanes · {{ vendor_map|length }} vendor(s) quoted</div>
+        </div>
+        <div style="margin-left:auto">
+          <span style="background:#fef3c7;color:#92400e;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700">🎯 Round 2</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vendors -->
+  <div class="card" style="margin-bottom:20px">
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border)">
+      <div style="font-size:14px;font-weight:700">Vendors Who Quoted ({{ vendor_map|length }})</div>
+      <div style="font-size:12px;color:var(--text-2);margin-top:2px">Round 2 emails will be sent to all these vendors</div>
+    </div>
+    <div style="padding:14px 20px;display:flex;gap:8px;flex-wrap:wrap">
+      {% for vname, vemail in vendor_map.items() %}
+      <div style="background:#f0fdf9;border:1px solid #a7f3d0;border-radius:8px;padding:6px 12px;font-size:13px">
+        <span style="font-weight:600;color:#065f46">{{ vname }}</span>
+        <span style="color:#6b7280;margin-left:6px;font-size:11px">{{ vemail }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Form -->
+  <form method="POST" action="{{ url_for('results.round2', rfq_id=rfq.id) }}" id="round2-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <!-- Target Rate Table -->
+    <div class="card" style="margin-bottom:20px">
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border)">
+        <div style="font-size:14px;font-weight:700">Set Target Rate per Lane</div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:2px">These target rates will be shown to all vendors in the Round 2 email</div>
+      </div>
+      <div style="padding:16px 20px">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">#</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">Lane</th>
+              <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">KMs</th>
+              <th style="padding:10px 14px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">Target Rate (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for lane in lanes %}
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:12px 14px;color:var(--text-2);font-size:13px">{{ loop.index }}</td>
+            <td style="padding:12px 14px">
+              <div style="font-weight:600;font-size:14px">{{ lane.lane_name }}</div>
+              {% if lane.cities %}<div style="font-size:11px;color:var(--text-2);margin-top:2px">{{ lane.cities }}</div>{% endif %}
+            </td>
+            <td style="padding:12px 14px;text-align:center;color:var(--text-2);font-size:13px">{{ lane.kms|int if lane.kms else '—' }}</td>
+            <td style="padding:12px 14px;text-align:right">
+              <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+                <span style="font-weight:700;color:var(--text-2)">₹</span>
+                <input type="number" name="target_{{ lane.id }}"
+                       value="{{ lane.target_rate if lane.target_rate else '' }}"
+                       placeholder="Enter target rate"
+                       min="0" step="1"
+                       style="width:160px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;text-align:right;outline:none;font-family:inherit"
+                       onfocus="this.style.borderColor='#0a8a6e'"
+                       onblur="this.style.borderColor='var(--border)'"/>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Info -->
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px 20px;margin-bottom:20px;font-size:13px;color:#92400e">
+      <strong>What happens when you click Send:</strong>
+      <ul style="margin:8px 0 0 16px;line-height:1.8">
+        <li>Target rates are saved for each lane</li>
+        <li>Each vendor gets a brand new unique quote link</li>
+        <li>Email shows target rate per lane</li>
+        <li>Vendors submit revised quotes via the new link</li>
+      </ul>
+    </div>
+
+    <!-- Buttons -->
+    <div style="display:flex;gap:12px;justify-content:flex-end">
+      <a href="{{ url_for('results.results') }}" class="btn btn-secondary">Cancel</a>
+      <button type="submit" class="btn btn-primary" id="r2-submit-btn">
+        🎯 Send Target Rates &amp; New Quote Links
+      </button>
+    </div>
+
+  </form>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('round2-form').addEventListener('submit', function(e) {
+  var btn = document.getElementById('r2-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+});
+</script>
+{% endblock %}

@@ -1,0 +1,246 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — Shadowfax RFQ Portal{% endblock %}
+{% block topbar_title %}Dashboard{% endblock %}
+{% block topbar_sub %}Welcome back, {{ current_user.name }} · {{ now.strftime('%A, %d %B %Y') }} · <span style='color:#0a8a6e'>🔄 Auto-refresh in <span id='refresh-countdown'>3:00</span></span>{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('rfq.create_rfq') }}" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#0a8a6e;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;box-shadow:0 2px 8px rgba(10,138,110,.3)">
+    <svg style="width:14px;height:14px" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
+    New RFQ
+  </a>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;flex-direction:column;gap:20px">
+
+{% if deadline_soon %}
+<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  <span style="font-size:18px">⏰</span>
+  <div style="flex:1">
+    <div style="font-weight:700;color:#92400e;font-size:13px">{{ deadline_soon|length }} RFQ deadline{{ 's' if deadline_soon|length != 1 }} expiring soon!</div>
+    <div style="font-size:12px;color:#b45309;margin-top:2px">{% for r in deadline_soon %}<span style="background:#fef3c7;border-radius:4px;padding:1px 7px;margin-right:6px">{{ r.rfq_id }} — {{ r.deadline.strftime('%d %b') }}</span>{% endfor %}</div>
+  </div>
+  <a href="{{ url_for('rfq.rfq_list') }}" style="font-size:12px;color:#92400e;font-weight:700;text-decoration:none;border:1px solid #f59e0b;padding:4px 12px;border-radius:6px">View All →</a>
+</div>
+{% endif %}
+
+{% if needs_action %}
+<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  <span style="font-size:18px">🏆</span>
+  <div style="flex:1">
+    <div style="font-weight:700;color:#991b1b;font-size:13px">{{ needs_action|length }} RFQ{{ 's' if needs_action|length != 1 }} waiting for winner selection!</div>
+    <div style="font-size:12px;color:#b91c1c;margin-top:2px">{% for item in needs_action %}<span style="background:#fee2e2;border-radius:4px;padding:1px 7px;margin-right:6px">{{ item.rfq.rfq_id }} — {{ item.quotes }} quotes</span>{% endfor %}</div>
+  </div>
+  <a href="{{ url_for('results.results') }}" style="font-size:12px;color:#991b1b;font-weight:700;text-decoration:none;border:1px solid #f87171;padding:4px 12px;border-radius:6px">Go to Results →</a>
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+  <div style="background:linear-gradient(135deg,#0a8a6e,#0ea882);border-radius:14px;padding:20px;color:#fff;box-shadow:0 4px 16px rgba(10,138,110,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.8;margin-bottom:8px">Total RFQs</div>
+        <div style="font-size:36px;font-weight:800;line-height:1">{{ total }}</div>
+        <div style="font-size:12px;opacity:.8;margin-top:6px">{{ closed }} closed · {{ (sent - closed)|abs }} active</div>
+      </div>
+      <div style="background:rgba(255,255,255,.2);border-radius:10px;padding:10px;font-size:22px">📋</div>
+    </div>
+  </div>
+  <div style="background:linear-gradient(135deg,#c8cc2a,#a8af1e);border-radius:14px;padding:20px;color:#1a1d23;box-shadow:0 4px 16px rgba(200,204,42,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.7;margin-bottom:8px">Total Savings</div>
+        <div style="font-size:28px;font-weight:800;line-height:1">₹{{ '{:,.0f}'.format(savings) }}</div>
+        <div style="font-size:12px;opacity:.7;margin-top:6px">{{ savings_pct }}% below guideline</div>
+      </div>
+      <div style="background:rgba(0,0,0,.1);border-radius:10px;padding:10px;font-size:22px">💰</div>
+    </div>
+  </div>
+  <div style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:14px;padding:20px;color:#fff;box-shadow:0 4px 16px rgba(245,158,11,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.8;margin-bottom:8px">Pending Approval</div>
+        <div style="font-size:36px;font-weight:800;line-height:1">{{ pending }}</div>
+        <div style="font-size:12px;opacity:.8;margin-top:6px">{{ draft }} in draft</div>
+      </div>
+      <div style="background:rgba(255,255,255,.2);border-radius:10px;padding:10px;font-size:22px">⏳</div>
+    </div>
+  </div>
+  <div style="background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:14px;padding:20px;color:#fff;box-shadow:0 4px 16px rgba(99,102,241,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.8;margin-bottom:8px">Vendors</div>
+        <div style="font-size:36px;font-weight:800;line-height:1">{{ total_vendors }}</div>
+        <div style="font-size:12px;opacity:.8;margin-top:6px">{{ active_vendors }} working with us · {{ total_quotes }} quotes</div>
+      </div>
+      <div style="background:rgba(255,255,255,.2);border-radius:10px;padding:10px;font-size:22px">🤝</div>
+    </div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
+  {% for label, val, color in [('Draft', draft, '#6b7280'),('Pending', pending, '#d97706'),('Approved', approved, '#0891b2'),('Sent/Active', sent - closed, '#7c3aed'),('Quotes', total_quotes, '#0a8a6e')] %}
+  <div style="background:#fff;border:1px solid #e5e7eb;border-left:3px solid {{ color }};border-radius:10px;padding:12px 14px">
+    <div style="font-size:10px;font-weight:700;color:{{ color }};text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">{{ label }}</div>
+    <div style="font-size:22px;font-weight:800;color:#111827">{{ val }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+  <div class="card">
+    <div class="card-header"><h3>📈 RFQ Trend (Last 6 Months)</h3></div>
+    <div style="padding:16px 20px"><canvas id="trendChart" height="180"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>🗺️ Zone-wise Distribution</h3></div>
+    <div style="padding:16px 20px"><canvas id="zoneChart" height="180"></canvas></div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">
+  <div class="card">
+    <div class="card-header"><h3>🔵 Status Breakdown</h3></div>
+    <div style="padding:16px 20px;display:flex;align-items:center;gap:16px">
+      <canvas id="statusChart" width="130" height="130" style="flex-shrink:0"></canvas>
+      <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+        {% set s_colors = ['#9ca3af','#f59e0b','#0891b2','#7c3aed','#0a8a6e','#ef4444'] %}
+        {% set s_labels = ['Draft','Pending','Approved','Sent','Closed','Rejected'] %}
+        {% set s_vals = [draft, pending, approved, sent - closed, closed, rejected] %}
+        {% for i in range(s_labels|length) %}
+        {% if s_vals[i] > 0 %}
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="width:8px;height:8px;border-radius:50%;background:{{ s_colors[i] }};flex-shrink:0"></div>
+            <span style="color:#4b5563">{{ s_labels[i] }}</span>
+          </div>
+          <strong>{{ s_vals[i] }}</strong>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>🏅 Top Vendors by Quotes</h3></div>
+    <div style="padding:8px 20px 16px">
+      {% if top_vendors %}{% for v in top_vendors %}
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f3f4f6">
+        <div style="width:22px;height:22px;border-radius:50%;background:{% if loop.index==1 %}#f59e0b{% elif loop.index==2 %}#9ca3af{% elif loop.index==3 %}#7c3aed{% else %}#e5e7eb{% endif %};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:{% if loop.index<=3 %}#fff{% else %}#6b7280{% endif %};flex-shrink:0">{{ loop.index }}</div>
+        <div style="flex:1;font-size:13px;font-weight:500;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ v.name }}</div>
+        <div style="font-size:12px;font-weight:700;color:#0a8a6e;background:#f0fdf9;padding:2px 8px;border-radius:6px">{{ v.count }}</div>
+      </div>
+      {% endfor %}{% else %}
+      <div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px">No quotes yet</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>📊 Vertical Breakdown</h3></div>
+    <div style="padding:8px 20px 16px">
+      {% if vertical_data %}{% for v in vertical_data %}
+      {% set pct = ((v.count / total) * 100)|round|int if total else 0 %}
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+          <span style="font-weight:500;color:#374151">{{ v.name }}</span>
+          <span style="color:#6b7280">{{ v.count }} ({{ pct }}%)</span>
+        </div>
+        <div style="height:6px;background:#f3f4f6;border-radius:99px;overflow:hidden">
+          <div style="height:100%;background:#0a8a6e;border-radius:99px;width:{{ pct }}%"></div>
+        </div>
+      </div>
+      {% endfor %}{% else %}
+      <div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px">No vertical data</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+  <div class="card">
+    <div class="card-header"><h3>⏳ Pending Approvals</h3>{% if pending %}<a href="{{ url_for('rfq.approvals') }}" class="btn btn-primary btn-sm">Review All</a>{% endif %}</div>
+    {% if pending_approvals %}{% for r in pending_approvals %}
+    <div style="padding:10px 20px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:10px">
+      <span style="background:#fffbeb;color:#92400e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;flex-shrink:0">{{ r.rfq_id }}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.subject }}</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:1px">{{ r.zone or '—' }} · {{ r.created_by }}</div>
+      </div>
+      <a href="{{ url_for('rfq.approvals') }}" style="font-size:11px;color:#0a8a6e;font-weight:600;text-decoration:none">Review →</a>
+    </div>
+    {% endfor %}{% else %}
+    <div style="padding:28px;text-align:center;color:#9ca3af;font-size:13px"><div style="font-size:28px;margin-bottom:8px">✅</div>No pending approvals</div>
+    {% endif %}
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>🕐 Recent RFQs</h3><a href="{{ url_for('rfq.rfq_list') }}" class="btn btn-secondary btn-sm">View All</a></div>
+    {% if recent %}{% for r in recent %}
+    {% set sc = {'Draft':'#6b7280','Pending':'#d97706','Approved':'#0891b2','Sent':'#7c3aed','Closed':'#059669','Rejected':'#dc2626'} %}
+    <div style="padding:10px 20px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:10px">
+      <span style="background:{{ sc.get(r.status,'#6b7280') }}22;color:{{ sc.get(r.status,'#6b7280') }};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;flex-shrink:0">{{ r.status }}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.subject }}</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:1px">{{ r.rfq_id }} · {{ r.zone or '—' }} · {{ r.created_at.strftime('%d %b %Y') if r.created_at else '' }}</div>
+      </div>
+      <a href="{{ url_for('rfq.rfq_detail', rfq_id=r.id) }}" style="font-size:11px;color:#0a8a6e;font-weight:600;text-decoration:none">View →</a>
+    </div>
+    {% endfor %}{% else %}
+    <div style="padding:28px;text-align:center;color:#9ca3af;font-size:13px">No RFQs yet</div>
+    {% endif %}
+  </div>
+</div>
+
+{% if closed > 0 %}
+<div style="background:linear-gradient(135deg,#f0fdf9,#e6f7f4);border:1px solid #a7f3d0;border-radius:14px;padding:20px 24px;display:flex;gap:32px;flex-wrap:wrap;align-items:center">
+  <div style="font-size:13px;font-weight:700;color:#065f46">💰 Savings Summary ({{ closed }} closed RFQs)</div>
+  {% for label, val in [('Guideline Cost', '₹' + '{:,.0f}'.format(total_guideline)), ('Final Cost', '₹' + '{:,.0f}'.format(total_final)), ('Total Savings', '₹' + '{:,.0f}'.format(savings)), ('Savings %', savings_pct|string + '%')] %}
+  <div>
+    <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">{{ label }}</div>
+    <div style="font-size:18px;font-weight:{% if loop.index >= 3 %}800{% else %}700{% endif %};color:{% if loop.index >= 3 %}#059669{% else %}#374151{% endif %}">{{ val }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh dashboard every 3 minutes
+var refreshTimer = setTimeout(function() {
+  window.location.reload();
+}, 3 * 60 * 1000);
+
+// Show refresh countdown
+var countdown = 180;
+var countdownEl = document.getElementById('refresh-countdown');
+if (countdownEl) {
+  setInterval(function() {
+    countdown--;
+    if (countdown <= 0) countdown = 180;
+    var mins = Math.floor(countdown / 60);
+    var secs = countdown % 60;
+    countdownEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+  }, 1000);
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+var trendCtx = document.getElementById('trendChart');
+if (trendCtx) {
+  new Chart(trendCtx, { type:'line', data:{ labels:{{ monthly_labels|tojson }}, datasets:[{ label:'RFQs', data:{{ monthly_values|tojson }}, borderColor:'#0a8a6e', backgroundColor:'rgba(10,138,110,.1)', borderWidth:2.5, pointBackgroundColor:'#0a8a6e', pointRadius:4, fill:true, tension:0.4 }]}, options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true,ticks:{stepSize:1},grid:{color:'#f3f4f6'}}, x:{grid:{display:false}} }}});
+}
+var zoneCtx = document.getElementById('zoneChart');
+if (zoneCtx) {
+  new Chart(zoneCtx, { type:'bar', data:{ labels:{{ zone_labels|tojson }}, datasets:[{ data:{{ zone_values|tojson }}, backgroundColor:['#0a8a6e','#c8cc2a','#6366f1','#f59e0b','#06b6d4','#ec4899'], borderRadius:6 }]}, options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true,ticks:{stepSize:1},grid:{color:'#f3f4f6'}}, x:{grid:{display:false}} }}});
+}
+var statusCtx = document.getElementById('statusChart');
+if (statusCtx) {
+  var sd = {{ status_data|tojson }}, sl = {{ status_labels|tojson }};
+  var sc = ['#9ca3af','#f59e0b','#0891b2','#7c3aed','#0a8a6e','#ef4444'];
+  var fd=[],fl=[],fc=[];
+  sd.forEach(function(v,i){if(v>0){fd.push(v);fl.push(sl[i]);fc.push(sc[i]);}});
+  new Chart(statusCtx, { type:'doughnut', data:{ labels:fl, datasets:[{ data:fd, backgroundColor:fc, borderWidth:2, borderColor:'#fff' }]}, options:{ responsive:false, cutout:'65%', plugins:{legend:{display:false}}}});
+}
+</script>
+{% endblock %}

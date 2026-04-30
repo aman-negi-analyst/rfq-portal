@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Lane Performance{% endblock %}
+{% block topbar_title %}Lane Performance Dashboard{% endblock %}
+{% block topbar_sub %}Competition, savings and vendor trends per lane{% endblock %}
+{% block content %}
+{% if lane_stats %}
+<div class="card">
+  <div class="card-header"><h3>🛣️ Lane Performance Overview</h3><span class="chip">{{ lane_stats|length }} lanes</span></div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#f9fafb">
+        {% for h in ['Lane','RFQs','Vendors','Quotes','L1 Rate','Avg Rate','Highest Rate','vs Guideline','Savings %','Top Winner','Competition'] %}
+        <th style="padding:10px 14px;text-align:{% if loop.index==1 %}left{% else %}center{% endif %};font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">{{ h }}</th>
+        {% endfor %}
+      </tr></thead>
+      <tbody>
+      {% for l in lane_stats %}
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:10px 14px">
+          <div style="font-weight:700;color:#111827">{{ l.name }}</div>
+        </td>
+        <td style="padding:10px 14px;text-align:center;color:#6b7280">{{ l.rfq_count }}</td>
+        <td style="padding:10px 14px;text-align:center;font-weight:600;color:#4f46e5">{{ l.vendor_count }}</td>
+        <td style="padding:10px 14px;text-align:center;color:#6b7280">{{ l.quote_count }}</td>
+        <td style="padding:10px 14px;text-align:center;font-weight:700;color:#059669">₹{{ '{:,.0f}'.format(l.best) }}</td>
+        <td style="padding:10px 14px;text-align:center;color:#374151">₹{{ '{:,.0f}'.format(l.avg) }}</td>
+        <td style="padding:10px 14px;text-align:center;color:#dc2626">₹{{ '{:,.0f}'.format(l.worst) }}</td>
+        <td style="padding:10px 14px;text-align:center">
+          {% if l.guideline %}
+          {% set diff = l.best - l.guideline %}
+          {% if diff < 0 %}<span style="color:#059669;font-weight:700">▼ ₹{{ '{:,.0f}'.format(diff|abs) }}</span>
+          {% elif diff > 0 %}<span style="color:#dc2626;font-weight:700">▲ ₹{{ '{:,.0f}'.format(diff) }}</span>
+          {% else %}—{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td style="padding:10px 14px;text-align:center">
+          {% if l.savings_pct > 0 %}
+          <span style="background:#ecfdf5;color:#059669;border-radius:6px;padding:2px 8px;font-weight:700;font-size:12px">{{ l.savings_pct }}%</span>
+          {% else %}—{% endif %}
+        </td>
+        <td style="padding:10px 14px;text-align:center;font-size:12px;color:#374151;font-weight:500">{{ l.top_winner or '—' }}</td>
+        <td style="padding:10px 14px;text-align:center">
+          <div style="display:flex;align-items:center;justify-content:center;gap:4px">
+            <div style="width:50px;height:6px;background:#f3f4f6;border-radius:99px;overflow:hidden">
+              <div style="height:100%;background:{% if l.comp_score>=66 %}#059669{% elif l.comp_score>=33 %}#d97706{% else %}#dc2626{% endif %};width:{{ l.comp_score }}%"></div>
+            </div>
+            <span style="font-size:11px;color:#6b7280">{{ l.comp_score }}%</span>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card" style="padding:40px;text-align:center;color:#9ca3af">
+  <div style="font-size:36px;margin-bottom:10px">🛣️</div>
+  <div style="font-weight:600;margin-bottom:6px">No lane data yet</div>
+  <div style="font-size:13px">Lane performance will appear once vendors start submitting quotes.</div>
+</div>
+{% endif %}
+{% endblock %}

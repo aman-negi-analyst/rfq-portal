@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Notifications — RFQ Portal{% endblock %}
+{% block topbar_title %}Notifications{% endblock %}
+{% block topbar_sub %}Your activity feed{% endblock %}
+
+{% block content %}
+<div class="card">
+  {% if notifications %}
+  <div style="padding:0">
+    {% for n in notifications %}
+    <a href="{{ n.link or '#' }}" style="display:flex;align-items:flex-start;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);text-decoration:none;{% if not n.is_read %}background:#eff6ff{% endif %};transition:background .15s" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='{% if not n.is_read %}#eff6ff{% endif %}'">
+      <div style="width:8px;height:8px;border-radius:50%;background:{% if not n.is_read %}var(--accent){% else %}var(--border){% endif %};flex-shrink:0;margin-top:6px"></div>
+      <div style="flex:1">
+        <div style="font-weight:{% if not n.is_read %}600{% else %}500{% endif %};font-size:14px;color:var(--text)">{{ n.title }}</div>
+        {% if n.message %}<div style="font-size:13px;color:var(--text-2);margin-top:2px">{{ n.message }}</div>{% endif %}
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px">{{ n.created_at.strftime('%d %b %Y at %H:%M') }}</div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state"><div class="empty-icon">🔔</div><h3>No notifications</h3><p>You're all caught up!</p></div>
+  {% endif %}
+</div>
+{% endblock %}

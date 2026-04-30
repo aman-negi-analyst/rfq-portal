@@ -1,0 +1,824 @@
+{% extends 'base.html' %}
+{% block title %}{{ rfq.rfq_id }} — RFQ Portal{% endblock %}
+{% block topbar_title %}{{ rfq.rfq_id }}{% endblock %}
+{% block topbar_sub %}{{ rfq.subject }}{% endblock %}
+{% block topbar_actions %}
+  {% set sc = {'Draft':'badge-draft','Pending':'badge-pending','Approved':'badge-approved','Sent':'badge-sent','Closed':'badge-closed','Rejected':'badge-rejected'} %}
+  <span class="badge {{ sc.get(rfq.status,'badge-draft') }}" style="font-size:13px;padding:5px 14px">{{ rfq.status }}</span>
+  {% if rfq.status == 'Draft' and (rfq.created_by == current_user.email or current_user.role == 'Admin') %}
+  <a href="{{ url_for('rfq.create_rfq') }}?edit={{ rfq.id }}" class="btn btn-secondary btn-sm">✏️ Edit</a>
+  {% endif %}
+  {% if rfq.status in ['Approved','Sent'] %}
+  <a href="{{ url_for('admin.view_quote_links', rfq_id=rfq.id) }}" class="btn btn-secondary btn-sm">
+    🔗 Quote Links {% if submitted > 0 %}<span style="background:var(--success);color:#fff;border-radius:99px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:4px">{{ submitted }} in</span>{% endif %}
+  </a>
+  {% endif %}
+  {% if rfq.status == 'Approved' %}
+  <form method="POST" action="{{ url_for('rfq.send_rfq', rfq_id=rfq.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-primary btn-sm">📤 Mark as Sent</button>
+  </form>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+<!-- Back + Status Bar -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+  <a href="{{ url_for('rfq.rfq_list') }}" style="color:#0a8a6e;font-size:13px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:4px">
+    ← Back to RFQ Management
+  </a>
+  <a href="{{ url_for('rfq.rfq_pdf', rfq_id=rfq.id) }}" target="_blank"
+     style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#f3f4f6;color:#374151;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;border:1px solid #e5e7eb">
+    🖨️ Print / PDF
+  </a>
+  {% if rfq.status in ['Sent','Approved'] %}
+  <button onclick="document.getElementById('extend-deadline-modal').style.display='flex'"
+          style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#fffbeb;color:#92400e;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #fde68a">
+    📅 Extend Deadline
+  </button>
+  {% endif %}
+  {% if rfq.status == 'Closed' and rfq.winner_vendor %}
+  <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:8px 16px;display:flex;align-items:center;gap:10px">
+    <span style="font-size:18px">🏆</span>
+    <div>
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Winner</div>
+      <div style="font-weight:700;color:#059669">{{ rfq.winner_vendor }}</div>
+    </div>
+    {% if rfq.final_cost %}
+    <div style="border-left:1px solid #d1fae5;padding-left:10px">
+      <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Final Cost</div>
+      <div style="font-weight:700;color:#059669">₹{{ '{:,.0f}'.format(rfq.final_cost) }}</div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- RFQ Summary Header Card -->
+<div style="background:linear-gradient(135deg,#0a8a6e,#0ea882);border-radius:14px;padding:20px 24px;margin-bottom:20px;color:#fff">
+  <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+    <div style="flex:1;min-width:200px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <span style="background:rgba(255,255,255,.2);border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700">{{ rfq.rfq_id }}</span>
+        <span style="background:rgba(255,255,255,.15);border-radius:6px;padding:2px 10px;font-size:12px;font-weight:600">{{ rfq.status }}</span>
+        {% if rfq.vertical %}<span style="background:rgba(255,255,255,.15);border-radius:6px;padding:2px 10px;font-size:12px">{{ rfq.vertical }}</span>{% endif %}
+      </div>
+      <div style="font-size:20px;font-weight:800;margin-bottom:6px;line-height:1.3">{{ rfq.subject }}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;opacity:.9">
+        {% if rfq.zone %}<span>🗺️ {{ rfq.zone }}</span>{% endif %}
+        {% if rfq.lanes %}<span>📍 {{ rfq.lanes|length }} Lane{{ 's' if rfq.lanes|length != 1 }}</span>{% endif %}
+        {% if rfq.deadline %}
+        <span>📅 {{ rfq.deadline.strftime('%d %b %Y') }}{% if rfq.deadline < today and rfq.status not in ['Closed','Rejected'] %} <strong style="color:#fde68a">⚠️ Overdue</strong>{% endif %}</span>
+        {% endif %}
+      </div>
+    </div>
+    <!-- Stats -->
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      {% set total_gc = namespace(val=0) %}
+      {% for l in rfq.lanes %}{% set total_gc.val = total_gc.val + (l.guideline_cost or 0) %}{% endfor %}
+      {% if total_gc.val > 0 %}
+      <div style="text-align:center;background:rgba(255,255,255,.15);border-radius:10px;padding:10px 16px">
+        <div style="font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Guideline</div>
+        <div style="font-size:16px;font-weight:800">₹{{ '{:,.0f}'.format(total_gc.val) }}</div>
+      </div>
+      {% endif %}
+      {% if quotes %}
+      <div style="text-align:center;background:rgba(255,255,255,.15);border-radius:10px;padding:10px 16px">
+        <div style="font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Quotes</div>
+        <div style="font-size:16px;font-weight:800">{{ quotes|length }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Progress Steps -->
+  {% set steps = ['Draft','Pending','Approved','Sent','Closed'] %}
+  {% set current_idx = steps.index(rfq.status) if rfq.status in steps else 0 %}
+  <div style="margin-top:16px;display:flex;align-items:center;gap:0">
+    {% for step in steps %}
+    {% set idx = loop.index0 %}
+    {% set is_done = idx <= current_idx and rfq.status != 'Rejected' %}
+    <div style="display:flex;align-items:center;flex:1">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1">
+        <div style="width:{% if idx == current_idx %}14px{% else %}8px{% endif %};height:{% if idx == current_idx %}14px{% else %}8px{% endif %};border-radius:50%;background:{% if is_done %}#fff{% else %}rgba(255,255,255,.3){% endif %};{% if idx == current_idx %}box-shadow:0 0 0 3px rgba(255,255,255,.4){% endif %}"></div>
+        <span style="font-size:9px;font-weight:{% if idx == current_idx %}700{% else %}400{% endif %};opacity:{% if is_done %}1{% else %}.6{% endif %}">{{ step }}</span>
+      </div>
+      {% if not loop.last %}
+      <div style="height:2px;flex:1;background:{% if idx < current_idx %}rgba(255,255,255,.7){% else %}rgba(255,255,255,.25){% endif %};margin-bottom:12px"></div>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if rfq.status == 'Rejected' %}
+    <span style="font-size:11px;color:#fde68a;font-weight:700;margin-left:8px">❌ Rejected</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="two-col" style="align-items:start">
+  <!-- LEFT -->
+  <div>
+    <!-- RFQ Info Card -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>📋 RFQ Information</h3></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          {% for label, value, color in [
+            ('Zone', rfq.zone or '—', None),
+            ('Vertical', rfq.vertical or '—', None),
+            ('Deadline', rfq.deadline.strftime('%d %b %Y') if rfq.deadline else '—', 'var(--danger)' if rfq.deadline and rfq.deadline < today else None),
+            ('Lanes', rfq.lanes|length|string, None),
+          ] %}
+          <div style="background:#f9fafb;border-radius:8px;padding:10px 12px">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;margin-bottom:4px">{{ label }}</div>
+            <div style="font-size:14px;font-weight:600;color:{{ color or '#111827' }}">{{ value }}</div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f9fafb;border-radius:8px">
+            <div style="width:32px;height:32px;border-radius:50%;background:#0a8a6e;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">{{ rfq.created_by[0]|upper if rfq.created_by else '?' }}</div>
+            <div>
+              <div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">Created By</div>
+              <div style="font-size:13px;font-weight:600">{{ rfq.created_by or '—' }}</div>
+              {% if rfq.created_at %}<div style="font-size:11px;color:#6b7280">{{ rfq.created_at.strftime('%d %b %Y, %H:%M') }}</div>{% endif %}
+            </div>
+          </div>
+          {% if rfq.approved_by %}
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f0fdf9;border-radius:8px">
+            <div style="width:32px;height:32px;border-radius:50%;background:#059669;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">{{ rfq.approved_by[0]|upper }}</div>
+            <div>
+              <div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">Approved By</div>
+              <div style="font-size:13px;font-weight:600;color:#059669">{{ rfq.approved_by }}</div>
+            </div>
+          </div>
+          {% else %}
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#fffbeb;border-radius:8px">
+            <div style="width:32px;height:32px;border-radius:50%;background:#f59e0b;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0">⏳</div>
+            <div style="font-size:13px;color:#92400e;font-weight:500">Awaiting Approval</div>
+          </div>
+          {% endif %}
+        </div>
+
+        {% if rfq.primary_lane %}
+        <div style="margin-top:12px;padding:10px 12px;background:#f9fafb;border-radius:8px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;margin-bottom:4px">Primary Lane</div>
+          <div style="font-size:14px;font-weight:600;color:#0a8a6e">🛣️ {{ rfq.primary_lane }}</div>
+        </div>
+        {% endif %}
+        {% if rfq.notes %}
+        <div style="margin-top:12px;padding:10px 12px;background:#f9fafb;border-radius:8px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;margin-bottom:4px">Notes</div>
+          <p style="font-size:13px;color:#374151;margin:0;line-height:1.6">{{ rfq.notes }}</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Lane Details -->
+    {% if rfq.lanes %}
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <h3>🛣️ Lane Details</h3>
+        <span style="background:#0a8a6e;color:#fff;border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700">{{ rfq.lanes|length }} Lane{{ 's' if rfq.lanes|length!=1 }}</span>
+      </div>
+      <div style="padding:4px 0">
+        {% for lane in rfq.lanes %}
+        <div style="padding:14px 20px;border-bottom:1px solid #f3f4f6">
+          <!-- Lane Header -->
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+            <div style="width:26px;height:26px;background:#0a8a6e;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0">{{ loop.index }}</div>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:14px;color:#111827">{{ lane.lane_name }}{% if lane.lane_code %} <span style="font-size:11px;color:#9ca3af;font-weight:400">({{ lane.lane_code }})</span>{% endif %}</div>
+              {% if lane.cities %}<div style="font-size:11px;color:#6b7280;margin-top:1px">📍 {{ lane.cities }}</div>{% endif %}
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              {% if lane.vehicle_type %}<span style="background:#eef2ff;color:#4f46e5;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600">{{ lane.vehicle_type }}</span>{% endif %}
+              {% if lane.lane_type %}<span style="background:#f0fdf9;color:#059669;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600">{{ lane.lane_type }}</span>{% endif %}
+            </div>
+          </div>
+          <!-- Lane Stats Grid -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            {% set fields = [] %}
+            {% if lane.kms %}{% set _ = fields.append(('Distance', lane.kms|int|string + ' km', None)) %}{% endif %}
+            {% if lane.frequency %}{% set _ = fields.append(('Frequency', lane.frequency, None)) %}{% endif %}
+            {% if lane.fleet_count %}{% set _ = fields.append(('Fleet', lane.fleet_count|string, None)) %}{% endif %}
+            {% if lane.no_of_drivers %}{% set _ = fields.append(('Drivers', lane.no_of_drivers|string, None)) %}{% endif %}
+            {% if lane.effective_date %}{% set _ = fields.append(('Effective Date', lane.effective_date, None)) %}{% endif %}
+            {% if lane.working_hours %}{% set _ = fields.append(('Working Hours', lane.working_hours, None)) %}{% endif %}
+            {% if lane.extra_per_km %}{% set _ = fields.append(('Extra/KM', '₹' + lane.extra_per_km|string, '#d97706')) %}{% endif %}
+            {% if lane.extra_per_hour %}{% set _ = fields.append(('Extra/Hour', '₹' + lane.extra_per_hour|string, '#d97706')) %}{% endif %}
+            {% if lane.guideline_cost %}{% set _ = fields.append(('Guideline Cost', '₹' + '{:,.0f}'.format(lane.guideline_cost), '#059669')) %}{% endif %}
+            {% if lane.guideline_cpk %}{% set _ = fields.append(('Guideline CPK', '₹' + '{:.2f}'.format(lane.guideline_cpk), '#059669')) %}{% endif %}
+            {% for label, value, color in fields %}
+            <div style="background:#f9fafb;border-radius:8px;padding:8px 10px">
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;margin-bottom:2px">{{ label }}</div>
+              <div style="font-size:13px;font-weight:600;color:{{ color or '#111827' }}">{{ value }}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+        <!-- Total -->
+        <div style="padding:12px 20px;background:#f0fdf9;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;color:#6b7280;font-weight:500">Total Guideline Cost ({{ rfq.lanes|length }} lanes)</span>
+          <strong style="font-size:16px;color:#059669">₹{{ '{:,.0f}'.format(rfq.lanes|sum(attribute='guideline_cost')) }}</strong>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Delete -->
+    {% if current_user.role == 'Admin' %}
+    <div style="text-align:right">
+      <form method="POST" action="{{ url_for('rfq.delete_rfq', rfq_id=rfq.id) }}" style="display:inline" onsubmit="return confirm('Delete this RFQ permanently?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-danger btn-sm">🗑 Delete RFQ</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- RIGHT: Quotes / Actions -->
+  <div>
+    <!-- Approval Actions -->
+    {% if rfq.status == 'Pending' %}
+    <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fde68a;border-radius:14px;padding:20px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:24px">⏳</span>
+        <div>
+          <div style="font-weight:700;font-size:15px;color:#92400e">Approval Required</div>
+          <div style="font-size:12px;color:#b45309;margin-top:2px">This RFQ is waiting for your review</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <form method="POST" action="{{ url_for('rfq.approve_rfq', rfq_id=rfq.id) }}" style="flex:1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-success btn-full" style="padding:12px">✅ Approve RFQ</button>
+        </form>
+        <form method="POST" action="{{ url_for('rfq.reject_rfq', rfq_id=rfq.id) }}" style="flex:1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger btn-full" style="padding:12px" onclick="return confirm('Reject this RFQ?')">❌ Reject</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Vendor Quotes Section -->
+    {% if rfq.status in ['Sent','Approved'] or quotes %}
+
+    <!-- Section Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:#111827">📊 Vendor Quotes</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:2px">Lane-wise comparison — lowest rate shown first</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        {% if quotes %}
+        <a href="{{ url_for('rfq.export_rfq_quotes', rfq_id=rfq.id) }}" class="btn btn-secondary btn-sm">⬇ Export</a>
+        {% endif %}
+        {% if rfq.status in ['Sent','Approved'] %}
+        <button class="btn btn-primary btn-sm" onclick="openModal('quote-matrix-modal')">✏️ Enter Quotes</button>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if quotes %}
+    {% set r1_quotes = quotes|selectattr('is_round2','equalto',False)|list %}
+    {% set r2_quotes = quotes|selectattr('is_round2','equalto',True)|list %}
+    {% set all_vendors = quotes|map(attribute='vendor_name')|unique|list %}
+
+    <!-- Summary Stats -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      <div style="background:#f0fdf9;border:1px solid #a7f3d0;border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#059669;margin-bottom:4px">Vendors</div>
+        <div style="font-size:22px;font-weight:800;color:#065f46">{{ all_vendors|length }}</div>
+      </div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#2563eb;margin-bottom:4px">Round 1</div>
+        <div style="font-size:22px;font-weight:800;color:#1d4ed8">{{ r1_quotes|length }}</div>
+      </div>
+      <div style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#7c3aed;margin-bottom:4px">Round 2</div>
+        <div style="font-size:22px;font-weight:800;color:#6d28d9">{{ r2_quotes|length }}</div>
+      </div>
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:4px">Lanes</div>
+        <div style="font-size:22px;font-weight:800;color:#374151">{{ quotes|map(attribute='lane_id')|unique|list|length }}</div>
+      </div>
+    </div>
+
+    <!-- Round Tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:14px;background:#f3f4f6;padding:4px;border-radius:10px;width:fit-content">
+      <button onclick="showRound('r1')" id="tab-r1"
+              style="padding:6px 16px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:#fff;color:#1d4ed8;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+        Round 1 ({{ r1_quotes|length }})
+      </button>
+      {% if r2_quotes %}
+      <button onclick="showRound('r2')" id="tab-r2"
+              style="padding:6px 16px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:#6b7280">
+        Round 2 ({{ r2_quotes|length }})
+      </button>
+      {% endif %}
+    </div>
+
+    <!-- Vendor chips -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      {% for vname in all_vendors %}
+      <span style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:600;color:#374151;display:flex;align-items:center;gap:6px">
+        <span style="width:8px;height:8px;border-radius:50%;background:#0a8a6e;display:inline-block"></span>
+        {{ vname }}
+      </span>
+      {% endfor %}
+    </div>
+
+    <!-- Round 1 Lanes -->
+    <div id="section-r1">
+    {% if not r1_quotes %}
+    <div style="background:#f9fafb;border:1px dashed #e5e7eb;border-radius:10px;padding:20px;text-align:center;color:#9ca3af;font-size:13px;margin-bottom:12px">No Round 1 quotes</div>
+    {% endif %}
+
+    <!-- Lane by Lane Cards -->
+    {% for lane in rfq.lanes %}
+    {% set lane_quotes = r1_quotes|selectattr('lane_id','eq',lane.id)|sort(attribute='quoted_cost')|list %}
+    {% if lane_quotes %}
+    <div style="border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:12px">
+
+      <!-- Lane Header -->
+      <div style="background:linear-gradient(135deg,#0a8a6e,#0ea882);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="width:24px;height:24px;background:rgba(255,255,255,.25);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0">{{ loop.index }}</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14px;color:#fff">{{ lane.lane_name }}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.8);margin-top:1px">
+            {% if lane.kms %}{{ lane.kms|int }} km{% endif %}
+            {% if lane.vehicle_type %} · {{ lane.vehicle_type }}{% endif %}
+            {% if lane.lane_type %} · {{ lane.lane_type }}{% endif %}
+          </div>
+        </div>
+        {% if lane.guideline_cost %}
+        <div style="text-align:right;background:rgba(255,255,255,.15);border-radius:8px;padding:6px 12px">
+          <div style="font-size:9px;color:rgba(255,255,255,.8);text-transform:uppercase;letter-spacing:.05em">Guideline</div>
+          <div style="font-weight:800;color:#fff;font-size:14px">₹{{ '{:,.0f}'.format(lane.guideline_cost) }}</div>
+        </div>
+        {% endif %}
+        <div style="text-align:right;background:rgba(255,255,255,.15);border-radius:8px;padding:6px 12px">
+          <div style="font-size:9px;color:rgba(255,255,255,.8);text-transform:uppercase;letter-spacing:.05em">Quotes</div>
+          <div style="font-weight:800;color:#fff;font-size:14px">{{ lane_quotes|length }}</div>
+        </div>
+      </div>
+
+      <!-- Vendor Quote Rows -->
+      {% for q in lane_quotes %}
+      {% set rank = loop.index %}
+      {% set rank_colors = {1: ('#059669','#f0fdf9','#a7f3d0'), 2: ('#6b7280','#f9fafb','#e5e7eb'), 3: ('#7c3aed','#faf5ff','#ddd6fe')} %}
+      {% set rc = rank_colors.get(rank, ('#9ca3af','#fff','#e5e7eb')) %}
+      <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #f3f4f6;background:{{ rc[1] }};flex-wrap:wrap">
+
+        <!-- Rank Badge -->
+        <div style="width:36px;height:36px;border-radius:10px;background:{{ rc[0] }};display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid {{ rc[2] }}">
+          <span style="color:#fff;font-size:11px;font-weight:800">L{{ rank }}</span>
+        </div>
+
+        <!-- Vendor Name -->
+        <div style="flex:1;min-width:100px">
+          <div style="font-weight:700;font-size:13px;color:#111827">{{ q.vendor_name }}</div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:1px">{{ q.submitted_at.strftime('%d %b %Y, %H:%M') if q.submitted_at else '—' }}</div>
+        </div>
+
+        <!-- Rate -->
+        <div style="text-align:right">
+          <div style="font-weight:800;font-size:16px;color:{{ rc[0] }}">₹{{ '{:,.0f}'.format(q.quoted_cost) }}</div>
+          {% if q.quoted_cpk %}
+          <div style="font-size:10px;color:#9ca3af">CPK: ₹{{ '%.2f'|format(q.quoted_cpk) }}</div>
+          {% endif %}
+        </div>
+
+        <!-- vs Guideline -->
+        {% if lane.guideline_cost %}
+        {% set diff = q.quoted_cost - lane.guideline_cost %}
+        <div style="text-align:center;min-width:70px">
+          {% if diff < 0 %}
+          <span style="background:#ecfdf5;color:#059669;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;display:block">▼ ₹{{ '{:,.0f}'.format(diff|abs) }}</span>
+          <span style="font-size:10px;color:#059669">below guideline</span>
+          {% elif diff > 0 %}
+          <span style="background:#fef2f2;color:#dc2626;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;display:block">▲ ₹{{ '{:,.0f}'.format(diff) }}</span>
+          <span style="font-size:10px;color:#dc2626">above guideline</span>
+          {% else %}
+          <span style="color:#9ca3af;font-size:12px">At guideline</span>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Delete -->
+        <form method="POST" action="{{ url_for('results.delete_quote', quote_id=q.id, rfq_id=rfq.id) }}"
+              style="display:inline"
+              onsubmit="return confirm('Delete quote from {{ q.vendor_name }}?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" title="Delete quote"
+                  style="background:none;border:none;cursor:pointer;color:#e5e7eb;font-size:14px;padding:4px 6px;border-radius:6px;line-height:1"
+                  onmouseover="this.style.color='#dc2626';this.style.background='#fef2f2'"
+                  onmouseout="this.style.color='#e5e7eb';this.style.background='none'">🗑</button>
+        </form>
+      </div>
+      {% endfor %}
+
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    </div><!-- end section-r1 -->
+
+    <!-- Round 2 Lanes -->
+    {% if r2_quotes %}
+    <div id="section-r2" style="display:none">
+      <div style="background:linear-gradient(135deg,#faf5ff,#ede9fe);border:1px solid #ddd6fe;border-radius:10px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">🔄</span>
+        <div>
+          <div style="font-weight:700;font-size:13px;color:#6d28d9">Round 2 Quotes — Revised Rates</div>
+          <div style="font-size:11px;color:#7c3aed;margin-top:1px">Submitted after target rates were shared with vendors</div>
+        </div>
+      </div>
+
+      {% for lane in rfq.lanes %}
+      {% set lane_r2 = r2_quotes|selectattr('lane_id','eq',lane.id)|sort(attribute='quoted_cost')|list %}
+      {% if lane_r2 %}
+      <div style="border:1px solid #ddd6fe;border-radius:12px;overflow:hidden;margin-bottom:12px">
+        <div style="background:linear-gradient(135deg,#7c3aed,#9333ea);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="width:24px;height:24px;background:rgba(255,255,255,.25);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0">{{ loop.index }}</div>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:14px;color:#fff">{{ lane.lane_name }}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.8)">{% if lane.kms %}{{ lane.kms|int }} km{% endif %}{% if lane.vehicle_type %} · {{ lane.vehicle_type }}{% endif %}</div>
+          </div>
+          {% if lane.target_rate %}
+          <div style="background:rgba(255,255,255,.15);border-radius:8px;padding:6px 12px;text-align:right">
+            <div style="font-size:9px;color:rgba(255,255,255,.8);text-transform:uppercase;letter-spacing:.05em">Target Rate</div>
+            <div style="font-weight:800;color:#fde68a;font-size:14px">₹{{ '{:,.0f}'.format(lane.target_rate) }}</div>
+          </div>
+          {% endif %}
+          <div style="background:rgba(255,255,255,.15);border-radius:8px;padding:6px 12px;text-align:right">
+            <div style="font-size:9px;color:rgba(255,255,255,.8);text-transform:uppercase;letter-spacing:.05em">Quotes</div>
+            <div style="font-weight:800;color:#fff;font-size:14px">{{ lane_r2|length }}</div>
+          </div>
+        </div>
+        {% for q in lane_r2 %}
+        {% set rank = loop.index %}
+        {% set rc = {1:('#7c3aed','#faf5ff'),2:('#9ca3af','#f9fafb'),3:('#9ca3af','#fff')}.get(rank,('#9ca3af','#fff')) %}
+        <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #f3f4f6;background:{{ rc[1] }};flex-wrap:wrap">
+          <div style="width:36px;height:36px;border-radius:10px;background:{{ rc[0] }};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <span style="color:#fff;font-size:11px;font-weight:800">L{{ rank }}</span>
+          </div>
+          <div style="flex:1;min-width:100px">
+            <div style="font-weight:700;font-size:13px;color:#111827">{{ q.vendor_name }}</div>
+            <div style="font-size:10px;color:#9ca3af;margin-top:1px">{{ q.submitted_at.strftime('%d %b %Y, %H:%M') if q.submitted_at else '—' }}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:800;font-size:16px;color:{{ rc[0] }}">₹{{ '{:,.0f}'.format(q.quoted_cost) }}</div>
+            {% if q.quoted_cpk %}<div style="font-size:10px;color:#9ca3af">CPK: ₹{{ '%.2f'|format(q.quoted_cpk) }}</div>{% endif %}
+          </div>
+          {% if lane.target_rate %}
+          {% set diff = q.quoted_cost - lane.target_rate %}
+          <div style="text-align:center;min-width:70px">
+            {% if diff < 0 %}
+            <span style="background:#ede9fe;color:#7c3aed;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;display:block">▼ ₹{{ '{:,.0f}'.format(diff|abs) }}</span>
+            <span style="font-size:10px;color:#7c3aed">below target</span>
+            {% elif diff > 0 %}
+            <span style="background:#fef2f2;color:#dc2626;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;display:block">▲ ₹{{ '{:,.0f}'.format(diff) }}</span>
+            <span style="font-size:10px;color:#dc2626">above target</span>
+            {% else %}
+            <span style="color:#9ca3af;font-size:12px">At target</span>
+            {% endif %}
+          </div>
+          {% endif %}
+          <form method="POST" action="{{ url_for('results.delete_quote', quote_id=q.id, rfq_id=rfq.id) }}" style="display:inline" onsubmit="return confirm('Delete this Round 2 quote?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" style="background:none;border:none;cursor:pointer;color:#e5e7eb;font-size:14px;padding:4px 6px;border-radius:6px"
+                    onmouseover="this.style.color='#dc2626';this.style.background='#fef2f2'"
+                    onmouseout="this.style.color='#e5e7eb';this.style.background='none'">🗑</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Footer -->
+    <div style="background:#f9fafb;border-radius:10px;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:12px;color:#6b7280;margin-bottom:16px">
+      <span>{{ quotes|length }} total quotes · {{ all_vendors|length }} vendors</span>
+      <span>💡 Go to Results page to select winner</span>
+    </div>
+
+    {% else %}
+    <!-- Empty State -->
+    <div style="background:#f9fafb;border:2px dashed #e5e7eb;border-radius:14px;padding:40px;text-align:center;margin-bottom:16px">
+      <div style="font-size:40px;margin-bottom:12px">📭</div>
+      <div style="font-weight:700;font-size:15px;color:#374151;margin-bottom:6px">No quotes received yet</div>
+      {% if rfq.status in ['Sent','Approved'] %}
+      <div style="font-size:13px;color:#6b7280;margin-bottom:16px">Vendors will submit via their email links, or you can enter manually</div>
+      <button class="btn btn-primary" onclick="openModal('quote-matrix-modal')">✏️ Enter Quotes Manually</button>
+      {% else %}
+      <div style="font-size:13px;color:#6b7280">Quotes will appear here once the RFQ is sent to vendors</div>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<!-- ════ QUOTE MATRIX MODAL ════ -->
+<div class="modal-overlay" id="quote-matrix-modal">
+  <div class="modal" style="max-width:900px;width:95%">
+    <div class="modal-header">
+      <div>
+        <h3>📊 Enter Vendor Quotes — {{ rfq.rfq_id }}</h3>
+        <p style="font-size:12px;color:var(--text-2);margin-top:3px">Enter rates for each vendor per lane. Leave blank to skip.</p>
+      </div>
+      <button class="modal-close" onclick="closeModal('quote-matrix-modal')">✕</button>
+    </div>
+    <form method="POST" action="{{ url_for('results.bulk_add_quotes', rfq_id=rfq.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="modal-body" style="padding:0;max-height:70vh;overflow-y:auto">
+
+      <!-- Vendor name row -->
+      <div style="padding:16px 20px;background:#f9fafb;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="font-size:13px;font-weight:600;flex-shrink:0">Vendors:</label>
+          <div id="vendor-tags" style="display:flex;gap:8px;flex-wrap:wrap;flex:1"></div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="text" id="new-vendor-input"
+                   placeholder="Type vendor name..."
+                   list="vlist"
+                   style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:200px;outline:none"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();addVendor()}"/>
+            <datalist id="vlist">
+              {% for v in vendors %}<option value="{{ v.name }}">{% endfor %}
+            </datalist>
+            <button type="button" class="btn btn-primary btn-sm" onclick="addVendor()">+ Add</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Matrix table -->
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:600px">
+          <thead>
+            <tr style="background:#f3f4f6">
+              <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:2px solid var(--border);position:sticky;left:0;background:#f3f4f6;min-width:180px">Lane</th>
+              <th style="padding:10px 12px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:2px solid var(--border)">KMs</th>
+              <th style="padding:10px 12px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:2px solid var(--border)">Guideline</th>
+              <th id="vendor-cols-header"></th>
+            </tr>
+          </thead>
+          <tbody id="matrix-tbody">
+            {% for lane in rfq.lanes %}
+            <tr id="lane-row-{{ lane.id }}" style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:10px 16px;position:sticky;left:0;background:#fff;border-right:1px solid #f3f4f6">
+                <div style="font-weight:600;color:var(--text)">{{ lane.lane_name }}</div>
+                {% if lane.cities %}<div style="font-size:11px;color:var(--text-2)">{{ lane.cities }}</div>{% endif %}
+              </td>
+              <td style="padding:10px 12px;text-align:center;color:var(--text-2);font-size:12px">{{ lane.kms|int if lane.kms else '—' }}</td>
+              <td style="padding:10px 12px;text-align:center;font-weight:600;color:var(--text-2);font-size:12px">
+                {% if lane.guideline_cost %}₹{{ '{:,.0f}'.format(lane.guideline_cost) }}{% else %}—{% endif %}
+              </td>
+              <td id="vendor-cells-{{ lane.id }}" style="padding:0"></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div id="hidden-inputs"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <span style="font-size:12px;color:var(--text-2)" id="entry-count">0 rates entered</span>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('quote-matrix-modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="save-quotes-btn">💾 Save All Quotes</button>
+      </div>
+    </div>
+    </form>
+  </div>
+</div>
+
+    <!-- Audit Trail -->
+    {% if audit_logs %}
+    <div class="card" style="margin-top:16px">
+      <div class="card-header"><h3>📋 Activity Log</h3><span class="chip">{{ audit_logs|length }}</span></div>
+      <div style="padding:4px 0">
+        {% for log in audit_logs %}
+        <div style="padding:10px 20px;border-bottom:1px solid #f9fafb;display:flex;align-items:flex-start;gap:12px">
+          <div style="width:32px;height:32px;border-radius:50%;background:
+            {% if 'Created' in log.action %}#eef2ff
+            {% elif 'Approved' in log.action %}#ecfdf5
+            {% elif 'Rejected' in log.action %}#fef2f2
+            {% elif 'Closed' in log.action %}#f0fdf9
+            {% elif 'Deadline' in log.action %}#fffbeb
+            {% elif 'Email' in log.action %}#eff6ff
+            {% else %}#f3f4f6{% endif %};
+            display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">
+            {% if 'Created' in log.action %}✏️
+            {% elif 'Approved' in log.action %}✅
+            {% elif 'Rejected' in log.action %}❌
+            {% elif 'Closed' in log.action %}🏆
+            {% elif 'Deadline' in log.action %}🔒
+            {% elif 'Email' in log.action %}📧
+            {% elif 'Round 2' in log.action %}🔄
+            {% else %}📌{% endif %}
+          </div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-weight:700;font-size:13px;color:#111827">{{ log.action }}</span>
+              <span style="font-size:11px;color:#9ca3af">by {{ log.user_name }}</span>
+            </div>
+            {% if log.detail %}<div style="font-size:12px;color:#6b7280;margin-top:2px">{{ log.detail }}</div>{% endif %}
+          </div>
+          <div style="font-size:11px;color:#9ca3af;flex-shrink:0;text-align:right">
+            {{ log.created_at.strftime('%d %b %Y') if log.created_at else '' }}<br>
+            {{ log.created_at.strftime('%H:%M') if log.created_at else '' }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+<!-- Extend Deadline Modal -->
+<div id="extend-deadline-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:28px;width:90%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.15)">
+    <h3 style="margin-bottom:6px">📅 Extend Deadline</h3>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:20px">Current deadline: <strong>{{ rfq.deadline.strftime('%d %b %Y') if rfq.deadline else '—' }}</strong></p>
+    <form method="POST" action="{{ url_for('rfq.extend_deadline', rfq_id=rfq.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:13px;font-weight:600;margin-bottom:5px">New Deadline *</label>
+        <input type="date" name="new_deadline" required
+               min="{{ rfq.deadline.strftime('%Y-%m-%d') if rfq.deadline else '' }}"
+               style="width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:14px;outline:none"/>
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-size:13px;font-weight:600;margin-bottom:5px">Reason (optional)</label>
+        <input type="text" name="reason" placeholder="e.g. More vendors needed to respond..."
+               style="width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;outline:none"/>
+      </div>
+      <div style="background:#f0fdf9;border:1px solid #a7f3d0;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#065f46">
+        📧 Vendors who received the original invite will be notified about the new deadline.
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('extend-deadline-modal').style.display='none'">Cancel</button>
+        <button type="submit" class="btn btn-primary">📅 Extend Deadline</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showRound(round) {
+  var r1 = document.getElementById('section-r1');
+  var r2 = document.getElementById('section-r2');
+  var t1 = document.getElementById('tab-r1');
+  var t2 = document.getElementById('tab-r2');
+
+  if (round === 'r1') {
+    if (r1) r1.style.display = 'block';
+    if (r2) r2.style.display = 'none';
+    if (t1) { t1.style.background='#fff'; t1.style.color='#1d4ed8'; t1.style.boxShadow='0 1px 4px rgba(0,0,0,.08)'; }
+    if (t2) { t2.style.background='transparent'; t2.style.color='#6b7280'; t2.style.boxShadow='none'; }
+  } else {
+    if (r1) r1.style.display = 'none';
+    if (r2) r2.style.display = 'block';
+    if (t2) { t2.style.background='#fff'; t2.style.color='#7c3aed'; t2.style.boxShadow='0 1px 4px rgba(0,0,0,.08)'; }
+    if (t1) { t1.style.background='transparent'; t1.style.color='#6b7280'; t1.style.boxShadow='none'; }
+  }
+}
+</script>
+<script>
+// ── Quote Matrix ──────────────────────────────────────
+var vendors = [];
+var lanes   = {{ rfq.lanes | map(attribute='id') | list | tojson }};
+var laneKms = {
+  {% for l in rfq.lanes %}'{{ l.id }}': {{ l.kms or 0 }},{% endfor %}
+};
+
+function addVendor() {
+  var inp  = document.getElementById('new-vendor-input');
+  var name = inp.value.trim();
+  if (!name) return;
+  if (vendors.includes(name)) { inp.value=''; return; }
+  vendors.push(name);
+  inp.value = '';
+  renderMatrix();
+}
+
+function removeVendor(name) {
+  vendors = vendors.filter(v => v !== name);
+  renderMatrix();
+}
+
+function renderMatrix() {
+  // Render vendor tags
+  var tagsEl = document.getElementById('vendor-tags');
+  tagsEl.innerHTML = vendors.map(v =>
+    `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--accent-light);color:var(--accent);border-radius:99px;padding:4px 10px;font-size:12px;font-weight:600">
+      ${v}
+      <button type="button" onclick="removeVendor('${v.replace(/'/g,"\'")}')"
+              style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:14px;line-height:1;padding:0">×</button>
+    </span>`
+  ).join('');
+
+  // Render header columns
+  var hdrEl = document.getElementById('vendor-cols-header');
+  hdrEl.innerHTML = vendors.map(v =>
+    `<th style="padding:10px 12px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-bottom:2px solid var(--border);min-width:130px">${v}</th>`
+  ).join('');
+
+  // Render cells per lane
+  lanes.forEach(function(laneId) {
+    var cellEl = document.getElementById('vendor-cells-' + laneId);
+    if (!cellEl) return;
+    cellEl.innerHTML = vendors.map(v =>
+      `<td style="padding:6px 8px;text-align:center">
+        <div style="position:relative;display:inline-block">
+          <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-2);font-weight:600">₹</span>
+          <input type="number"
+                 class="matrix-input"
+                 data-lane="${laneId}"
+                 data-vendor="${v.replace(/"/g,'&quot;')}"
+                 placeholder="0"
+                 min="0" step="1"
+                 oninput="onRateInput(this)"
+                 style="width:110px;padding:7px 8px 7px 20px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-weight:600;outline:none;transition:border-color .15s;background:#fafafa"
+                 onfocus="this.style.borderColor='var(--accent)';this.style.background='#fff'"
+                 onblur="this.style.borderColor='var(--border)';this.style.background='#fafafa'"/>
+        </div>
+        <div class="cpk-lbl" style="font-size:10px;color:var(--text-3);text-align:center;margin-top:2px;height:12px"></div>
+      </td>`
+    ).join('');
+  });
+
+  buildHiddenInputs();
+  updateCount();
+}
+
+function onRateInput(inp) {
+  var cost   = parseFloat(inp.value) || 0;
+  var laneId = inp.dataset.lane;
+  var kms    = laneKms[laneId] || 0;
+  var cpkEl  = inp.closest('td').querySelector('.cpk-lbl');
+  if (cost > 0 && kms > 0) {
+    var cpk = (cost / kms).toFixed(2);
+    cpkEl.textContent = '₹' + cpk + '/km';
+    cpkEl.style.color = '#6366f1';
+  } else {
+    cpkEl.textContent = '';
+  }
+  buildHiddenInputs();
+  updateCount();
+}
+
+function buildHiddenInputs() {
+  var container = document.getElementById('hidden-inputs');
+  container.innerHTML = '';
+  document.querySelectorAll('.matrix-input').forEach(function(inp) {
+    if (inp.value && parseFloat(inp.value) > 0) {
+      var laneInput   = document.createElement('input');
+      laneInput.type  = 'hidden';
+      laneInput.name  = 'lane_id[]';
+      laneInput.value = inp.dataset.lane;
+      var vendInput   = document.createElement('input');
+      vendInput.type  = 'hidden';
+      vendInput.name  = 'vendor_name[]';
+      vendInput.value = inp.dataset.vendor;
+      var costInput   = document.createElement('input');
+      costInput.type  = 'hidden';
+      costInput.name  = 'cost[]';
+      costInput.value = inp.value;
+      container.appendChild(laneInput);
+      container.appendChild(vendInput);
+      container.appendChild(costInput);
+    }
+  });
+}
+
+function updateCount() {
+  var filled = document.querySelectorAll('.matrix-input[value]:not([value=""])').length;
+  var count  = Array.from(document.querySelectorAll('.matrix-input'))
+               .filter(i => i.value && parseFloat(i.value) > 0).length;
+  var el = document.getElementById('entry-count');
+  if (el) el.textContent = count + ' rate' + (count!==1?'s':'') + ' entered';
+}
+
+// Allow Enter key to move to next cell
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && e.target.classList.contains('matrix-input')) {
+    e.preventDefault();
+    var inputs = Array.from(document.querySelectorAll('.matrix-input'));
+    var idx    = inputs.indexOf(e.target);
+    if (idx < inputs.length - 1) inputs[idx+1].focus();
+  }
+});
+</script>
+{% endblock %}

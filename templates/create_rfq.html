@@ -1,0 +1,835 @@
+{% extends 'base.html' %}
+{% block title %}{% if edit_rfq %}Edit RFQ{% else %}Create RFQ{% endif %} — RFQ Portal{% endblock %}
+{% block topbar_title %}{% if edit_rfq %}Edit RFQ{% else %}Create RFQ{% endif %}{% endblock %}
+{% block topbar_sub %}{% if edit_rfq %}Updating {{ edit_rfq.rfq_id }}{% else %}New request for quotation{% endif %}{% endblock %}
+{% block topbar_actions %}
+  <button type="button" class="btn btn-secondary btn-sm" onclick="location.reload()">↺ Refresh</button>
+{% endblock %}
+
+{% block content %}
+<style>
+.create-rfq-wrap {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media(max-width:900px){ .create-rfq-wrap { grid-template-columns: 1fr; } }
+
+.rfq-panel {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.05);
+  overflow: hidden;
+}
+.rfq-panel-header {
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.rfq-panel-header h3 { font-size: 15px; font-weight: 700; color: #111827; }
+.rfq-panel-body { padding: 22px; }
+
+.field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 7px;
+}
+.field-label .req { color: #ef4444; margin-left: 2px; }
+
+.field-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 9px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  background: #fafafa;
+  color: #111827;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.field-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.1);
+  background: #fff;
+}
+.field-input.auto-calc {
+  background: #f9fafb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+.field-group { margin-bottom: 18px; }
+.field-group:last-child { margin-bottom: 0; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+/* Lane block */
+.lane-block {
+  border: 1.5px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+.lane-block-hdr {
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-bottom: 1px solid #f3f4f6;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.lane-block-hdr .lane-title { font-size: 13px; font-weight: 700; color: #374151; }
+.lane-remove-btn {
+  background: none; border: none; cursor: pointer;
+  color: #ef4444; font-size: 18px; line-height: 1;
+  width: 24px; height: 24px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s;
+}
+.lane-remove-btn:hover { background: #fef2f2; }
+.lane-block-body { padding: 16px; }
+
+.metrics-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #9ca3af;
+  margin-bottom: 12px;
+  margin-top: 4px;
+  display: flex; align-items: center; gap: 8px;
+}
+.metrics-label::after { content: ''; flex: 1; height: 1px; background: #f3f4f6; }
+
+/* Bottom action bar */
+.action-bar {
+  display: flex; gap: 10px; justify-content: flex-end;
+  margin-top: 16px;
+}
+</style>
+
+{% if edit_rfq %}
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#1d4ed8;display:flex;align-items:center;gap:8px">
+  ✏️ Editing <strong>{{ edit_rfq.rfq_id }}</strong> — Changes will update the existing RFQ.
+</div>
+{% endif %}
+
+<form method="POST" id="rfq-form" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="edit_id" value="{{ edit_rfq.id if edit_rfq else '' }}">
+
+<div class="create-rfq-wrap">
+
+  <!-- ═══ LEFT: RFQ Details ═══ -->
+  <div class="rfq-panel">
+    <div class="rfq-panel-header">
+      <h3>RFQ Details</h3>
+    </div>
+    <div class="rfq-panel-body">
+
+      <div class="field-group">
+        <label class="field-label">Subject / Title <span class="req">*</span></label>
+        <input type="text" name="subject" class="field-input"
+               value="{{ edit_rfq.subject if edit_rfq else '' }}"
+               placeholder="e.g. Mumbai-Pune Transport RFQ Q1" required/>
+      </div>
+
+      <div class="field-row field-group">
+        <div>
+          <label class="field-label">Zone <span class="req">*</span></label>
+          <select name="zone" class="field-input">
+            <option value="">Select Zone</option>
+            {% for z in ['North','South','East','West','Central','National'] %}
+            <option value="{{ z }}" {% if edit_rfq and edit_rfq.zone==z %}selected{% endif %}>{{ z }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Deadline <span class="req">*</span></label>
+          <input type="date" name="deadline" class="field-input"
+                 value="{{ edit_rfq.deadline.strftime('%Y-%m-%d') if edit_rfq and edit_rfq.deadline else '' }}"
+                 required/>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Primary Lane</label>
+        <input type="text" name="primary_lane" class="field-input"
+               value="{{ edit_rfq.primary_lane if edit_rfq and edit_rfq.primary_lane else '' }}"
+               placeholder="e.g. Mumbai - Pune"/>
+        <p style="font-size:11px;color:#9ca3af;margin-top:5px">Main route or description of this RFQ</p>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Vertical</label>
+        <select name="vertical" class="field-input">
+          <option value="">Select Vertical</option>
+          {% for v in ['National','Zonal','Tertiary','Intracity Fixed','Intracity Fixed+Variable'] %}
+          <option value="{{ v }}" {% if edit_rfq and edit_rfq.vertical==v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Notes / Remarks</label>
+        <textarea name="notes" class="field-input" style="min-height:100px;resize:vertical"
+                  placeholder="Additional instructions or requirements...">{{ edit_rfq.notes if edit_rfq else '' }}</textarea>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">📎 Schedule Sheet
+          <span style="font-weight:400;color:#9ca3af;font-size:11px">(Excel / PDF — sent to vendors)</span>
+        </label>
+        <input type="file" name="schedule_file"
+               accept=".xlsx,.xls,.pdf,.csv,.doc,.docx"
+               style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13px;font-family:inherit;background:#fafafa;cursor:pointer"
+               onchange="showFileName(this)"/>
+        <p style="font-size:11px;color:#9ca3af;margin-top:5px">
+          This file will be <strong>automatically attached</strong> to vendor emails when RFQ is approved — then deleted from server.
+        </p>
+        <div id="file-name-display" style="margin-top:6px;font-size:12px;color:#059669;display:none"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ RIGHT: Lane Details ═══ -->
+  <div>
+    <div class="rfq-panel">
+      <div class="rfq-panel-header">
+        <h3>Lane Details</h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('lane-import-input').click()"
+                  title="Import lanes from Excel/CSV">
+            📤 Import Lanes
+          </button>
+          <input type="file" id="lane-import-input" accept=".csv,.xlsx,.xls"
+                 style="display:none" onchange="importLanes(this)"/>
+          <a href="/rfqs/lane-template" class="btn btn-ghost btn-sm" title="Download lane template">
+            📥 Template
+          </a>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="addLane()">+ Add Lane</button>
+        </div>
+      </div>
+      <!-- Import status message -->
+      <div id="import-status" style="display:none;padding:10px 16px;font-size:13px;border-bottom:1px solid var(--border)"></div>
+      <div class="rfq-panel-body" style="padding:16px">
+        <div id="lanes-container">
+
+          {% if edit_rfq and edit_rfq.lanes %}
+            {% for lane in edit_rfq.lanes %}
+            <div class="lane-block" id="lane-{{ loop.index }}">
+              <div class="lane-block-hdr">
+                <span class="lane-title">Lane {{ loop.index }}</span>
+                <button type="button" class="lane-remove-btn" onclick="removeLane(this)">×</button>
+              </div>
+              <div class="lane-block-body">
+                <div class="field-row" style="margin-bottom:14px">
+                  <div>
+                    <label class="field-label">Lane Code</label>
+                    <input type="text" name="lane_code[]" class="field-input" value="{{ lane.lane_code or '' }}" placeholder="e.g. NAT_1"/>
+                  </div>
+                  <div>
+                    <label class="field-label">Lane Name <span class="req">*</span></label>
+                    <input type="text" name="lane_name[]" class="field-input" value="{{ lane.lane_name or '' }}" placeholder="e.g. Delhi - Agra"/>
+                  </div>
+                </div>
+                <div style="margin-bottom:14px">
+                  <label class="field-label">Covered Cities</label>
+                  <input type="text" name="lane_cities[]" class="field-input" value="{{ lane.cities or '' }}" placeholder="e.g. Delhi, Mathura, Agra"/>
+                </div>
+                <div class="field-row" style="margin-bottom:14px">
+                  <div>
+                    <label class="field-label">Vehicle Size <span class="req">*</span></label>
+                    <select name="lane_vehicle[]" class="field-input">
+                      <option value="">Select vehicle</option>
+                      <option value="Tata Ace" {% if lane.vehicle_type=='Tata Ace' %}selected{% endif %}>Tata Ace</option>
+                      <option value="Bolero" {% if lane.vehicle_type=='Bolero' %}selected{% endif %}>Bolero</option>
+                      <option value="Tata 407" {% if lane.vehicle_type=='Tata 407' %}selected{% endif %}>Tata 407</option>
+                      <option value="14 Feet" {% if lane.vehicle_type=='14 Feet' %}selected{% endif %}>14 Feet</option>
+                      <option value="17 Feet" {% if lane.vehicle_type=='17 Feet' %}selected{% endif %}>17 Feet</option>
+                      <option value="20 Feet" {% if lane.vehicle_type=='20 Feet' %}selected{% endif %}>20 Feet</option>
+                      <option value="22 Feet" {% if lane.vehicle_type=='22 Feet' %}selected{% endif %}>22 Feet</option>
+                      <option value="24 Feet" {% if lane.vehicle_type=='24 Feet' %}selected{% endif %}>24 Feet</option>
+                      <option value="32 Feet" {% if lane.vehicle_type=='32 Feet' %}selected{% endif %}>32 Feet</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="field-label">Distance (km) <span class="req">*</span></label>
+                    <input type="number" name="lane_kms[]" class="field-input" value="{{ lane.kms or '' }}" placeholder="e.g. 200" step="0.1" oninput="autoCPK(this)"/>
+                  </div>
+                </div>
+                <div class="field-row" style="margin-bottom:14px">
+                  <div>
+                    <label class="field-label">Lane Type</label>
+                    <select name="lane_type[]" class="field-input">
+                      <option value="">Select type</option>
+                      {% for t in ['National','Zonal','Intracity','Last Mile','Line Haul'] %}
+                      <option>{{ t }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="field-label">Frequency <span class="req">*</span></label>
+                    <input type="text" name="lane_freq[]" class="field-input"
+                           value="{{ lane.frequency or '' }}"
+                           placeholder="e.g. 5 trips/month"/>
+                  </div>
+                </div>
+
+              <div class="field-row" style="margin-bottom:14px">
+                <div>
+                  <label class="field-label">Fleet Count</label>
+                  <input type="number" name="fleet_count[]" class="field-input" value="{{ lane.fleet_count or '' }}" placeholder="e.g. 2" min="0"/>
+                </div>
+                <div>
+                  <label class="field-label">No. of Drivers</label>
+                  <input type="number" name="no_of_drivers[]" class="field-input" value="{{ lane.no_of_drivers or '' }}" placeholder="e.g. 2" min="0"/>
+                </div>
+              </div>
+              <div class="field-row" style="margin-bottom:14px">
+                <div>
+                  <label class="field-label">Effective Date</label>
+                  <input type="date" name="effective_date[]" class="field-input" value="{{ lane.effective_date or '' }}"/>
+                </div>
+                <div>
+                  <label class="field-label">Working Hours</label>
+                  <input type="text" name="working_hours[]" class="field-input"
+                         value="{{ lane.working_hours or '' }}"
+                         placeholder="e.g. 8 hours / 24x7"/>
+                </div>
+              </div>
+              <div class="field-row" style="margin-bottom:14px">
+                <div>
+                  <label class="field-label">Extra per KM (₹)</label>
+                  <input type="number" name="extra_per_km[]" class="field-input"
+                         value="{{ lane.extra_per_km or '' }}" placeholder="e.g. 10" step="1" min="0"/>
+                </div>
+                <div>
+                  <label class="field-label">Extra per Hour (₹)</label>
+                  <input type="number" name="extra_per_hour[]" class="field-input"
+                         value="{{ lane.extra_per_hour or '' }}" placeholder="e.g. 150" step="1" min="0"/>
+                </div>
+              </div>
+                <div class="metrics-label">Internal Metrics (Guideline)</div>
+                <div class="field-row">
+                  <div>
+                    <label class="field-label">Guideline Cost (₹)</label>
+                    <input type="number" name="lane_gcost[]" class="field-input" value="{{ lane.guideline_cost or '' }}" placeholder="e.g. 15000" step="1" oninput="autoCPK(this)"/>
+                  </div>
+                  <div>
+                    <label class="field-label">Guideline CPK <span style="font-weight:400;color:#9ca3af;font-size:11px">(auto)</span></label>
+                    <input type="number" name="lane_gcpk[]" class="field-input auto-calc" value="{{ lane.guideline_cpk or '' }}" placeholder="Cost ÷ Kms" step="1" readonly/>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          {% else %}
+          <!-- Default Lane 1 -->
+          <div class="lane-block" id="lane-1">
+            <div class="lane-block-hdr">
+              <span class="lane-title">Lane 1</span>
+              <button type="button" class="lane-remove-btn" onclick="removeLane(this)">×</button>
+            </div>
+            <div class="lane-block-body">
+              <div class="field-row" style="margin-bottom:14px">
+                <div>
+                  <label class="field-label">Lane Code</label>
+                  <input type="text" name="lane_code[]" class="field-input" placeholder="e.g. NAT_1"/>
+                </div>
+                <div>
+                  <label class="field-label">Lane Name <span class="req">*</span></label>
+                  <input type="text" name="lane_name[]" class="field-input" placeholder="e.g. Delhi - Agra"/>
+                </div>
+              </div>
+              <div style="margin-bottom:14px">
+                <label class="field-label">Covered Cities</label>
+                <input type="text" name="lane_cities[]" class="field-input" placeholder="e.g. Delhi, Mathura, Agra"/>
+              </div>
+              <div class="field-row" style="margin-bottom:14px">
+                <div>
+                  <label class="field-label">Vehicle Size <span class="req">*</span></label>
+                  <select name="lane_vehicle[]" class="field-input">
+                    <option value="">Select vehicle</option>
+                    <option>Tata Ace</option>
+                    <option>Bolero</option>
+                    <option>Tata 407</option>
+                    <option>14 Feet</option>
+                    <option>17 Feet</option>
+                    <option>20 Feet</option>
+                    <option>22 Feet</option>
+                    <option>24 Feet</option>
+                    <option>32 Feet</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="field-label">Distance (km) <span class="req">*</span></label>
+                  <input type="number" name="lane_kms[]" class="field-input" placeholder="e.g. 200" step="0.1" oninput="autoCPK(this)"/>
+                </div>
+              </div>
+              <div class="field-row" style="margin-bottom:14px">
+                <div>
+                  <label class="field-label">Lane Type</label>
+                  <select name="lane_type[]" class="field-input">
+                    <option value="">Select type</option>
+                    <option>One Way</option>
+                    <option>Round Trip</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="field-label">Frequency <span class="req">*</span></label>
+                  <input type="text" name="lane_freq[]" class="field-input"
+                         placeholder="e.g. 5 trips/month"/>
+                </div>
+              </div>
+
+              <div class="field-row" style="margin-bottom:14px">
+                <div>
+                  <label class="field-label">Fleet Count</label>
+                  <input type="number" name="fleet_count[]" class="field-input" placeholder="e.g. 2" min="0"/>
+                </div>
+                <div>
+                  <label class="field-label">No. of Drivers</label>
+                  <input type="number" name="no_of_drivers[]" class="field-input" placeholder="e.g. 2" min="0"/>
+                </div>
+              </div>
+              <div class="field-row" style="margin-bottom:14px">
+                <div>
+                  <label class="field-label">Effective Date</label>
+                  <input type="date" name="effective_date[]" class="field-input"/>
+                </div>
+                <div>
+                  <label class="field-label">Working Hours</label>
+                  <input type="text" name="working_hours[]" class="field-input"
+                         placeholder="e.g. 8 hours / 24x7"/>
+                </div>
+              </div>
+              <div class="field-row" style="margin-bottom:14px">
+                <div>
+                  <label class="field-label">Extra per KM (₹)</label>
+                  <input type="number" name="extra_per_km[]" class="field-input"
+                         placeholder="e.g. 10" step="1" min="0"/>
+                </div>
+                <div>
+                  <label class="field-label">Extra per Hour (₹)</label>
+                  <input type="number" name="extra_per_hour[]" class="field-input"
+                         placeholder="e.g. 150" step="1" min="0"/>
+                </div>
+              </div>
+              <div class="metrics-label">Internal Metrics (Guideline)</div>
+              <div class="field-row">
+                <div>
+                  <label class="field-label">Guideline Cost (₹)</label>
+                  <input type="number" name="lane_gcost[]" class="field-input" placeholder="e.g. 15000" step="1" oninput="autoCPK(this)"/>
+                </div>
+                <div>
+                  <label class="field-label">Guideline CPK <span style="font-weight:400;color:#9ca3af;font-size:11px">(auto)</span></label>
+                  <input type="number" name="lane_gcpk[]" class="field-input auto-calc" placeholder="Cost ÷ Kms" step="1" readonly/>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-bar">
+      <a href="{{ url_for('rfq.rfq_list') }}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" name="action" value="Draft" class="btn btn-secondary">
+        💾 Save as Draft
+      </button>
+      <button type="submit" name="action" value="Pending"
+              class="btn btn-primary"
+              style="background:linear-gradient(135deg,#6366f1,#4f46e5);border:none;box-shadow:0 2px 8px rgba(99,102,241,.3)">
+        📤 Submit for Approval
+      </button>
+    </div>
+  </div>
+
+</div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Lane Import from CSV/Excel ──────────────────
+function importLanes(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var ext = file.name.split('.').pop().toLowerCase();
+  var statusEl = document.getElementById('import-status');
+  statusEl.style.display = 'block';
+  statusEl.style.background = '#eff6ff';
+  statusEl.style.color = '#1d4ed8';
+  statusEl.textContent = '⏳ Reading file...';
+
+  var reader = new FileReader();
+
+  if (ext === 'csv') {
+    reader.onload = function(e) {
+      try {
+        var text = e.target.result;
+        // Normalize line endings
+        text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        var lines = text.split('\n').filter(l => l.trim());
+        var headerCols = parseCSVLine(lines[0]);
+        var headers = headerCols.map(h => h.trim().toLowerCase().replace(/['"]/g,'').replace(/\s+/g,'_'));
+        var rows = [];
+        for (var i = 1; i < lines.length; i++) {
+          var cols = parseCSVLine(lines[i]);
+          if (cols.some(c => c && c.trim())) rows.push(cols);
+        }
+        populateLanes(headers, rows, file.name);
+      } catch(err) {
+        showImportError('Failed to parse CSV: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  } else {
+    showImportError('For Excel files please save as CSV first (.csv format)');
+    // Reset input
+    input.value = '';
+  }
+}
+
+function parseCSVLine(line) {
+  var result = [], current = '', inQuotes = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (ch === '"') {
+      // Handle double quotes inside quoted field ""
+      if (inQuotes && line[i+1] === '"') { current += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current.trim());
+  // Clean each value — remove surrounding quotes and commas from numbers
+  return result.map(function(v) {
+    v = v.replace(/^["']|["']$/g, '').trim();
+    return v;
+  });
+}
+
+function cleanNumber(val) {
+  // Remove commas from numbers like 20,000 → 20000
+  if (!val) return '';
+  return val.replace(/,/g, '').trim();
+}
+
+function getCol(row, headers, name, def) {
+  var idx = headers.indexOf(name);
+  if (idx === -1) {
+    // Try partial match
+    for (var i = 0; i < headers.length; i++) {
+      if (headers[i].includes(name) || name.includes(headers[i])) { idx = i; break; }
+    }
+  }
+  return (idx !== -1 && idx < row.length) ? (row[idx] || def || '') : (def || '');
+}
+
+function populateLanes(headers, rows, filename) {
+  if (!rows.length) {
+    showImportError('No data rows found in file.');
+    return;
+  }
+
+  // Clear existing lanes
+  var container = document.getElementById('lanes-container');
+  container.innerHTML = '';
+  laneCount = 0;
+
+  rows.forEach(function(row, idx) {
+    if (!row.some(c => c.trim())) return;
+
+    laneCount++;
+    var n = laneCount;
+
+    // Get values from CSV
+    var laneCode    = getCol(row, headers, 'lane_code', '');
+    var laneName    = getCol(row, headers, 'lane_name', '') || getCol(row, headers, 'lane', '');
+    var cities      = getCol(row, headers, 'covered_cities', '') || getCol(row, headers, 'cities', '');
+    var vehicle     = getCol(row, headers, 'vehicle_size', '') || getCol(row, headers, 'vehicle', '');
+    var kms         = cleanNumber(getCol(row, headers, 'distance_km', '') || getCol(row, headers, 'kms', '') || getCol(row, headers, 'distance', ''));
+    var laneTypeRaw = getCol(row, headers, 'lane_type', '') || getCol(row, headers, 'trip_type', '') || getCol(row, headers, 'lane type', '') || getCol(row, headers, 'type', '');
+    // Normalize lane type — handle all variations
+    var laneType = (function(v) {
+      v = v.trim().toLowerCase();
+      if (v === 'one-way' || v === 'oneway' || v === 'one way' || v === '1 way' || v === 'ow' || v === 'one_way') return 'One Way';
+      if (v === 'round-trip' || v === 'roundtrip' || v === 'round trip' || v === 'rt' || v === 'two way' || v === 'two-way' || v === 'round_trip' || v === 'twoway') return 'Round Trip';
+      return laneTypeRaw;
+    })(laneTypeRaw);
+    var freq        = getCol(row, headers, 'frequency', '');
+    var fleet       = cleanNumber(getCol(row, headers, 'fleet_count', '') || getCol(row, headers, 'fleet', ''));
+    var drivers     = cleanNumber(getCol(row, headers, 'no_of_drivers', '') || getCol(row, headers, 'drivers', ''));
+    var effDate = (function() {
+      var v = getCol(row, headers, 'effective_date', '') ||
+              getCol(row, headers, 'effective date', '') ||
+              getCol(row, headers, 'effectivedate', '') ||
+              getCol(row, headers, 'eff_date', '') ||
+              getCol(row, headers, 'eff date', '') ||
+              getCol(row, headers, 'start_date', '') ||
+              getCol(row, headers, 'start date', '') ||
+              getCol(row, headers, 'date', '');
+      if (!v) return '';
+      // Normalize date formats to YYYY-MM-DD for HTML date input
+      v = v.trim();
+      // Already YYYY-MM-DD
+      if (v.match(/^\d{4}-\d{2}-\d{2}$/)) return v;
+      // MM-DD-YYYY (04-30-2026) → YYYY-MM-DD
+      var m1 = v.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+      if (m1) { var mo=parseInt(m1[1]),dy=parseInt(m1[2]); if(mo>=1&&mo<=12&&dy>=1&&dy<=31) return m1[3]+'-'+m1[1].padStart(2,'0')+'-'+m1[2].padStart(2,'0'); }
+      // DD/MM/YYYY or DD-MM-YYYY
+      var m2 = v.match(/^(\d{1,2})[\/](\d{1,2})[\/](\d{4})$/);
+      if (m2) return m2[3]+'-'+m2[2].padStart(2,'0')+'-'+m2[1].padStart(2,'0');
+      return v;
+    })();
+    var workHours   = getCol(row, headers, 'working_hours', '') || getCol(row, headers, 'working hours', '');
+    var extraKm     = cleanNumber(getCol(row, headers, 'extra_per_km', '') || getCol(row, headers, 'extra per km', ''));
+    var extraHour   = cleanNumber(getCol(row, headers, 'extra_per_hour', '') || getCol(row, headers, 'extra per hour', ''));
+    var gcost       = cleanNumber(getCol(row, headers, 'guideline_cost', '') || getCol(row, headers, 'guideline cost', ''));
+    var gcpk        = cleanNumber(getCol(row, headers, 'guideline_cpk', '') || getCol(row, headers, 'cpk', ''));
+
+    // Auto calc CPK if cost and kms available
+    if (gcost && kms && !gcpk) {
+      var c = parseFloat(gcost.replace(/,/g,'')), k = parseFloat(kms.replace(/,/g,''));
+      if (c > 0 && k > 0) gcpk = (c/k).toFixed(2);
+    }
+
+    // Build lane HTML
+    var html = buildLaneHTML(n, laneCode, laneName, cities, vehicle, kms, laneType, freq, fleet, drivers, effDate, workHours, extraKm, extraHour, gcost, gcpk);
+    container.insertAdjacentHTML('beforeend', html);
+  });
+
+  var statusEl = document.getElementById('import-status');
+  statusEl.style.background = '#ecfdf5';
+  statusEl.style.color = '#059669';
+  statusEl.innerHTML = '✅ <strong>' + laneCount + ' lane' + (laneCount!==1?'s':'') + '</strong> imported from <strong>' + filename + '</strong> — review and submit.';
+}
+
+function buildLaneHTML(n, code, name, cities, vehicle, kms, laneType, freq, fleet, drivers, effDate, workHours, extraKm, extraHour, gcost, gcpk) {
+  // Build vehicle options
+  var vehicles = ['Tata Ace','Bolero','Tata 407','14 Feet','17 Feet','20 Feet','22 Feet','24 Feet','32 Feet'];
+  var vOpts = '<option value="">Select vehicle</option>' + vehicles.map(v =>
+    '<option value="'+v+'"'+(v.toLowerCase()===vehicle.toLowerCase()?' selected':'')+'>'+v+'</option>'
+  ).join('');
+
+  // Build lane type options
+  var ltOpts = '<option value="">Select type</option>' +
+    ['One Way','Round Trip'].map(t =>
+      '<option value="'+t+'"'+(t.toLowerCase()===laneType.toLowerCase()?' selected':'')+'>'+t+'</option>'
+    ).join('');
+
+  return `
+  <div class="lane-block" id="lane-${n}">
+    <div class="lane-block-hdr">
+      <span class="lane-title">Lane ${n}</span>
+      <button type="button" class="lane-remove-btn" onclick="removeLane(this)">×</button>
+    </div>
+    <div class="lane-block-body">
+      <div class="field-row" style="margin-bottom:14px">
+        <div><label class="field-label">Lane Code</label>
+          <input type="text" name="lane_code[]" class="field-input" value="${code}" placeholder="e.g. NAT_1"/></div>
+        <div><label class="field-label">Lane Name <span class="req">*</span></label>
+          <input type="text" name="lane_name[]" class="field-input" value="${name}" placeholder="e.g. Delhi - Agra"/></div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="field-label">Covered Cities</label>
+        <input type="text" name="lane_cities[]" class="field-input" value="${cities}" placeholder="e.g. Delhi, Mathura, Agra"/>
+      </div>
+      <div class="field-row" style="margin-bottom:14px">
+        <div><label class="field-label">Vehicle Size <span class="req">*</span></label>
+          <select name="lane_vehicle[]" class="field-input">${vOpts}</select></div>
+        <div><label class="field-label">Distance (km) <span class="req">*</span></label>
+          <input type="number" name="lane_kms[]" class="field-input" value="${kms}" placeholder="e.g. 200" step="0.1" oninput="autoCPK(this)"/></div>
+      </div>
+      <div class="field-row" style="margin-bottom:14px">
+        <div><label class="field-label">Lane Type</label>
+          <select name="lane_type[]" class="field-input">${ltOpts}</select></div>
+        <div><label class="field-label">Frequency <span class="req">*</span></label>
+          <input type="text" name="lane_freq[]" class="field-input" value="${freq}" placeholder="e.g. 5 trips/month"/></div>
+      </div>
+      <div class="field-row" style="margin-bottom:14px">
+        <div><label class="field-label">Fleet Count</label>
+          <input type="number" name="fleet_count[]" class="field-input" value="${fleet}" placeholder="e.g. 2" min="0"/></div>
+        <div><label class="field-label">No. of Drivers</label>
+          <input type="number" name="no_of_drivers[]" class="field-input" value="${drivers}" placeholder="e.g. 2" min="0"/></div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="field-label">Effective Date</label>
+        <input type="date" name="effective_date[]" class="field-input" value="${effDate}"/>
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="field-label">Working Hours</label>
+        <input type="text" name="working_hours[]" class="field-input" value="${workHours}" placeholder="e.g. 8 hours / 24x7"/>
+      </div>
+      <div class="metrics-label">Internal Metrics (Guideline)</div>
+      <div class="field-row">
+        <div><label class="field-label">Guideline Cost (₹)</label>
+          <input type="number" name="lane_gcost[]" class="field-input" value="${gcost}" placeholder="e.g. 15000" step="1" oninput="autoCPK(this)"/></div>
+        <div><label class="field-label">Guideline CPK <span style="font-weight:400;color:#9ca3af;font-size:11px">(auto)</span></label>
+          <input type="number" name="lane_gcpk[]" class="field-input auto-calc" value="${gcpk}" placeholder="Cost ÷ Kms" step="1" readonly/></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function showImportError(msg) {
+  var statusEl = document.getElementById('import-status');
+  statusEl.style.display = 'block';
+  statusEl.style.background = '#fef2f2';
+  statusEl.style.color = '#dc2626';
+  statusEl.textContent = '❌ ' + msg;
+}
+
+function showFileName(input) {
+  var display = document.getElementById('file-name-display');
+  if (input.files && input.files[0]) {
+    display.style.display = 'block';
+    display.innerHTML = '📎 Selected: <strong>' + input.files[0].name + '</strong>';
+  }
+}
+
+var laneCount = {{ (edit_rfq.lanes|length if edit_rfq and edit_rfq.lanes else 1) }};
+
+function addLane() {
+  laneCount++;
+  var n = laneCount;
+  var html = `
+  <div class="lane-block" id="lane-${n}">
+    <div class="lane-block-hdr">
+      <span class="lane-title">Lane ${n}</span>
+      <button type="button" class="lane-remove-btn" onclick="removeLane(this)">×</button>
+    </div>
+    <div class="lane-block-body">
+      <div class="field-row" style="margin-bottom:14px">
+        <div>
+          <label class="field-label">Lane Code</label>
+          <input type="text" name="lane_code[]" class="field-input" placeholder="e.g. NAT_${n}"/>
+        </div>
+        <div>
+          <label class="field-label">Lane Name <span class="req">*</span></label>
+          <input type="text" name="lane_name[]" class="field-input" placeholder="e.g. City A - City B"/>
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="field-label">Covered Cities</label>
+        <input type="text" name="lane_cities[]" class="field-input" placeholder="e.g. City A, City B"/>
+      </div>
+      <div class="field-row" style="margin-bottom:14px">
+        <div>
+          <label class="field-label">Vehicle Size <span class="req">*</span></label>
+          <select name="lane_vehicle[]" class="field-input">
+            <option value="">Select vehicle</option>
+            <option>Tata Ace</option>
+            <option>Bolero</option>
+            <option>Tata 407</option>
+            <option>14 Feet</option>
+            <option>17 Feet</option>
+            <option>20 Feet</option>
+            <option>22 Feet</option>
+            <option>24 Feet</option>
+            <option>32 Feet</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Distance (km) <span class="req">*</span></label>
+          <input type="number" name="lane_kms[]" class="field-input" placeholder="e.g. 200" step="0.1" oninput="autoCPK(this)"/>
+        </div>
+      </div>
+      <div class="field-row" style="margin-bottom:14px">
+        <div>
+          <label class="field-label">Lane Type</label>
+          <select name="lane_type[]" class="field-input">
+            <option value="">Select type</option>
+            <option>One Way</option>
+            <option>Round Trip</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Frequency <span class="req">*</span></label>
+          <input type="text" name="lane_freq[]" class="field-input"
+                 placeholder="e.g. 5 trips/month"/>
+        </div>
+      </div>
+      <div class="field-row" style="margin-bottom:14px">
+        <div>
+          <label class="field-label">Fleet Count</label>
+          <input type="number" name="fleet_count[]" class="field-input" placeholder="e.g. 2" min="0"/>
+        </div>
+        <div>
+          <label class="field-label">Effective Date</label>
+          <input type="date" name="effective_date[]" class="field-input"/>
+        </div>
+        <div>
+          <label class="field-label">Working Hours</label>
+          <input type="text" name="working_hours[]" class="field-input"
+                 placeholder="e.g. 8 hours / 24x7"/>
+        </div>
+      </div>
+      <div class="field-row" style="margin-bottom:14px">
+        <div>
+          <label class="field-label">Extra per KM (₹)</label>
+          <input type="number" name="extra_per_km[]" class="field-input"
+                 placeholder="e.g. 10" step="1" min="0"/>
+        </div>
+        <div>
+          <label class="field-label">Extra per Hour (₹)</label>
+          <input type="number" name="extra_per_hour[]" class="field-input"
+                 placeholder="e.g. 150" step="1" min="0"/>
+        </div>
+      </div>
+      <div class="metrics-label">Internal Metrics (Guideline)</div>
+      <div class="field-row">
+        <div>
+          <label class="field-label">Guideline Cost (₹)</label>
+          <input type="number" name="lane_gcost[]" class="field-input" placeholder="e.g. 15000" step="1" oninput="autoCPK(this)"/>
+        </div>
+        <div>
+          <label class="field-label">Guideline CPK <span style="font-weight:400;color:#9ca3af;font-size:11px">(auto)</span></label>
+          <input type="number" name="lane_gcpk[]" class="field-input auto-calc" placeholder="Cost ÷ Kms" step="1" readonly/>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  var container = document.getElementById('lanes-container');
+  container.insertAdjacentHTML('beforeend', html);
+  // Scroll to new lane
+  document.getElementById('lane-'+n).scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function removeLane(btn) {
+  var block = btn.closest('.lane-block');
+  if (document.querySelectorAll('.lane-block').length > 1) {
+    block.remove();
+  } else {
+    alert('At least one lane is required.');
+  }
+}
+
+function autoCPK(input) {
+  var block = input.closest('.lane-block-body');
+  var cost  = parseFloat(block.querySelector('[name="lane_gcost[]"]').value) || 0;
+  var kms   = parseFloat(block.querySelector('[name="lane_kms[]"]').value)   || 0;
+  var cpk   = block.querySelector('[name="lane_gcpk[]"]');
+  if (cost > 0 && kms > 0) {
+    cpk.value = (cost / kms).toFixed(2);
+    cpk.style.color = '#6366f1';
+  } else {
+    cpk.value = '';
+    cpk.style.color = '#9ca3af';
+  }
+}
+</script>
+{% endblock %}

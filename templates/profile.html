@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+{% block title %}My Profile — RFQ Portal{% endblock %}
+{% block topbar_title %}My Profile{% endblock %}
+{% block topbar_sub %}Manage your account settings{% endblock %}
+
+{% block content %}
+<style>
+.profile-avatar-lg {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  font-size: 32px;
+  font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px rgba(99,102,241,.3);
+  flex-shrink: 0;
+}
+.role-badge-lg {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px; border-radius: 99px;
+  font-size: 12px; font-weight: 600;
+}
+</style>
+
+<div style="max-width:800px;margin:0 auto">
+
+  {% if error %}
+  <div class="alert alert-error" style="margin-bottom:16px">⚠️ {{ error }}</div>
+  {% endif %}
+  {% if success %}
+  <div class="alert alert-success" style="margin-bottom:16px">✅ {{ success }}</div>
+  {% endif %}
+
+  <!-- Profile Header Card -->
+  <div class="card" style="margin-bottom:20px">
+    <div style="padding:28px;display:flex;align-items:center;gap:20px;background:linear-gradient(135deg,#eef2ff,#f0fdf4);border-bottom:1px solid var(--border)">
+      <div class="profile-avatar-lg">{{ user.name[0]|upper }}</div>
+      <div>
+        <h2 style="font-size:22px;font-weight:800;color:#111827;margin-bottom:4px">{{ user.name }}</h2>
+        <div style="color:#6b7280;font-size:14px;margin-bottom:8px">{{ user.email }}</div>
+        <span class="role-badge-lg {% if user.role=='Admin' %}badge-admin{% else %}badge-ops{% endif %}">
+          {% if user.role == 'Admin' %}👑{% else %}👤{% endif %}
+          {{ user.role }}
+        </span>
+        <span style="font-size:12px;color:#9ca3af;margin-left:12px">
+          Member since {{ user.created_at.strftime('%B %Y') if user.created_at else 'N/A' }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col" style="align-items:start;gap:20px">
+
+    <!-- Edit Profile -->
+    <div class="card">
+      <div class="card-header">
+        <h3>✏️ Edit Profile</h3>
+      </div>
+      <div class="card-body">
+        <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="profile">
+          <div class="form-group">
+            <label>Full Name *</label>
+            <input type="text" name="name" value="{{ user.name }}" required
+                   placeholder="Your full name"/>
+          </div>
+          <div class="form-group">
+            <label>Email Address *</label>
+            <input type="email" name="email" value="{{ user.email }}" required
+                   placeholder="your@email.com"/>
+          </div>
+          <div class="form-group">
+            <label>Role</label>
+            <input type="text" value="{{ user.role }}" readonly
+                   style="background:#f9fafb;color:var(--text-2);cursor:not-allowed"/>
+            <p style="font-size:11px;color:var(--text-3);margin-top:4px">
+              Role can only be changed by an Admin
+            </p>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Save Changes</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Change Password -->
+    <div class="card">
+      <div class="card-header">
+        <h3>🔒 Change Password</h3>
+      </div>
+      <div class="card-body">
+        <form method="POST" id="pw-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="password">
+          <div class="form-group">
+            <label>Current Password *</label>
+            <div style="position:relative">
+              <input type="password" name="current_password" id="curr-pw"
+                     placeholder="Enter current password" required/>
+              <button type="button" onclick="toggleVis('curr-pw','eye1')"
+                      style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px"
+                      id="eye1">Show</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>New Password *</label>
+            <div style="position:relative">
+              <input type="password" name="new_password" id="new-pw"
+                     placeholder="Min. 6 characters" required minlength="6"
+                     oninput="checkStrength(this.value)"/>
+              <button type="button" onclick="toggleVis('new-pw','eye2')"
+                      style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px"
+                      id="eye2">Show</button>
+            </div>
+            <!-- Strength bar -->
+            <div style="margin-top:6px;height:4px;background:#f3f4f6;border-radius:99px;overflow:hidden">
+              <div id="strength-bar" style="height:100%;width:0;border-radius:99px;transition:all .3s"></div>
+            </div>
+            <div id="strength-label" style="font-size:11px;margin-top:4px;color:var(--text-3)"></div>
+          </div>
+          <div class="form-group">
+            <label>Confirm New Password *</label>
+            <input type="password" name="confirm_password" id="conf-pw"
+                   placeholder="Repeat new password" required
+                   oninput="checkMatch()"/>
+            <div id="match-label" style="font-size:11px;margin-top:4px"></div>
+          </div>
+          <button type="submit" class="btn btn-success btn-full">Update Password</button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Account Info -->
+  <div class="card" style="margin-top:20px">
+    <div class="card-header"><h3>ℹ️ Account Information</h3></div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0">
+      {% for label, value in [
+        ('User ID', '#' + user.id|string),
+        ('Status', 'Active' if user.is_active else 'Disabled'),
+        ('Role', user.role),
+        ('Member Since', user.created_at.strftime('%d %b %Y') if user.created_at else 'N/A')
+      ] %}
+      <div style="padding:16px 20px;border-right:1px solid var(--border){% if loop.last %};border-right:none{% endif %}">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:4px">{{ label }}</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text)">{{ value }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleVis(inputId, btnId) {
+  var inp = document.getElementById(inputId);
+  var btn = document.getElementById(btnId);
+  if (inp.type === 'password') { inp.type = 'text';     btn.textContent = 'Hide'; }
+  else                         { inp.type = 'password'; btn.textContent = 'Show'; }
+}
+
+function checkStrength(pw) {
+  var bar = document.getElementById('strength-bar');
+  var lbl = document.getElementById('strength-label');
+  var score = 0;
+  if (pw.length >= 6)  score++;
+  if (pw.length >= 10) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  var levels = [
+    { w:'20%', c:'#ef4444', l:'Very Weak' },
+    { w:'40%', c:'#f97316', l:'Weak' },
+    { w:'60%', c:'#f59e0b', l:'Fair' },
+    { w:'80%', c:'#10b981', l:'Strong' },
+    { w:'100%',c:'#059669', l:'Very Strong' },
+  ];
+  var lvl = levels[Math.min(score, 4)];
+  bar.style.width = lvl.w;
+  bar.style.background = lvl.c;
+  lbl.textContent = lvl.l;
+  lbl.style.color = lvl.c;
+}
+
+function checkMatch() {
+  var np = document.getElementById('new-pw').value;
+  var cp = document.getElementById('conf-pw').value;
+  var lbl = document.getElementById('match-label');
+  if (!cp) { lbl.textContent = ''; return; }
+  if (np === cp) {
+    lbl.textContent = '✅ Passwords match';
+    lbl.style.color = 'var(--success)';
+  } else {
+    lbl.textContent = '❌ Passwords do not match';
+    lbl.style.color = 'var(--danger)';
+  }
+}
+</script>
+{% endblock %}

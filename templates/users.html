@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block title %}User Management — RFQ Portal{% endblock %}
+{% block topbar_title %}User Management{% endblock %}
+{% block topbar_sub %}Manage team members and roles{% endblock %}
+{% block topbar_actions %}<button class="btn btn-primary btn-sm" onclick="openModal('user-modal')">+ Add User</button>{% endblock %}
+
+{% block content %}
+<form method="GET" style="margin-bottom:16px">
+<div class="toolbar">
+  <div class="toolbar-left">
+    <div class="search-wrap"><span class="search-icon">⌕</span><input type="text" name="search" value="{{ search }}" placeholder="Search users..."/></div>
+    <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+  </div>
+</div>
+</form>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for u in users %}
+      <tr>
+        <td style="font-weight:500">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">{{ u.name[0]|upper }}</div>
+            {{ u.name }}
+          </div>
+        </td>
+        <td style="color:var(--text-2)">{{ u.email }}</td>
+        <td>
+          {% set rc = {'Admin':'badge-admin','Manager':'badge-manager','Ops':'badge-ops'} %}
+          <span class="badge {{ rc.get(u.role,'badge-ops') }}">{{ u.role }}</span>
+        </td>
+        <td><span class="badge {% if u.is_active %}badge-approved{% else %}badge-rejected{% endif %}">{% if u.is_active %}Active{% else %}Disabled{% endif %}</span></td>
+        <td style="color:var(--text-2);font-size:13px">{{ u.created_at.strftime('%d %b %Y') }}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-sm" onclick="editUser({{ u.id }},'{{ u.name|replace("'","") }}','{{ u.email }}','{{ u.role }}')">Edit</button>
+            {% if u.id != current_user.id %}
+            <form method="POST" action="{{ url_for('admin.toggle_user', uid=u.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-ghost btn-sm">{% if u.is_active %}Disable{% else %}Enable{% endif %}</button>
+            </form>
+            <form method="POST" action="{{ url_for('admin.delete_user', uid=u.id) }}" style="display:inline"
+                  onsubmit="return confirm('Delete {{ u.name }}? This cannot be undone.')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--danger)">🗑 Delete</button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- User Modal -->
+<div class="modal-overlay" id="user-modal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 id="user-modal-title">Add User</h3>
+      <button class="modal-close" onclick="closeModal('user-modal')">✕</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin.save_user') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-body">
+        <input type="hidden" name="user_id" id="u-id">
+        <div class="form-group"><label>Full Name *</label><input type="text" name="name" id="u-name" placeholder="e.g. Priya Sharma" required/></div>
+        <div class="form-group"><label>Email *</label><input type="email" name="email" id="u-email" placeholder="priya@company.com" required/></div>
+        <div class="form-group">
+          <label>Role *</label>
+          <select name="role" id="u-role">
+            <option value="User">User — Full Procurement Access</option>
+            <option value="Admin">Admin — User + Delete/Settings</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Password <span id="pw-hint" style="font-weight:400;color:var(--text-2)">(required for new users)</span></label>
+          <div style="position:relative">
+            <input type="password" name="password" id="u-pw" placeholder="Min. 6 characters"
+                   style="padding-right:60px"/>
+            <button type="button" onclick="togglePwVis()"
+                    style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600"
+                    id="pw-eye">Show</button>
+          </div>
+          <div id="pw-edit-note" style="display:none;margin-top:6px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px 12px;font-size:12px;color:#92400e">
+            ⚠️ Leave blank to keep current password unchanged. Enter new password to reset it.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('user-modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save User</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePwVis() {
+  var inp = document.getElementById('u-pw');
+  var btn = document.getElementById('pw-eye');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = 'Hide'; }
+  else { inp.type = 'password'; btn.textContent = 'Show'; }
+}
+
+function editUser(id, name, email, role) {
+  document.getElementById('user-modal-title').textContent = 'Edit User — ' + name;
+  document.getElementById('u-id').value    = id;
+  document.getElementById('u-name').value  = name;
+  document.getElementById('u-email').value = email;
+  document.getElementById('u-role').value  = role;
+  document.getElementById('u-pw').value    = '';
+  document.getElementById('pw-hint').textContent = '(optional — change password)';
+  document.getElementById('pw-hint').style.color = '#6366f1';
+  document.getElementById('pw-edit-note').style.display = 'block';
+  openModal('user-modal');
+}
+</script>
+{% endblock %}

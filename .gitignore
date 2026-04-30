@@ -1,0 +1,10 @@
+*.db
+*.pyc
+__pycache__/
+.env
+venv/
+env/
+*.log
+.DS_Store
+migrations/versions/*.pyc
+uploads/schedules/*.xlsx

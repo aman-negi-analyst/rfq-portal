@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Approvals — RFQ Portal{% endblock %}
+{% block topbar_title %}Approvals{% endblock %}
+{% block topbar_sub %}RFQs pending your review{% endblock %}
+
+{% block content %}
+
+
+<div class="card">
+  <div class="card-header"><h3>Pending Approvals</h3><span class="chip">{{ rfqs|length }}</span></div>
+  <div class="table-wrap">
+    {% if rfqs %}
+    <table>
+      <thead><tr><th>RFQ ID</th><th>Subject</th><th>Zone</th><th>Deadline</th><th>Created By</th><th>Created At</th><th>Lanes</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for r in rfqs %}
+      <tr>
+        <td><span class="chip">{{ r.rfq_id }}</span></td>
+        <td style="font-weight:500"><a href="{{ url_for('rfq.rfq_detail', rfq_id=r.id) }}" style="color:var(--accent)">{{ r.subject }}</a></td>
+        <td>{{ r.zone or '—' }}</td>
+        <td style="{% if r.deadline and r.deadline < today %}color:var(--danger){% endif %}">{{ r.deadline.strftime('%d %b %Y') if r.deadline else '—' }}</td>
+        <td style="font-size:13px">
+          {% if r.created_by %}
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">{{ r.created_by[0]|upper }}</div>
+            {{ r.created_by }}
+          </div>
+          {% else %}—{% endif %}
+        </td>
+        <td style="color:var(--text-2);font-size:13px">{{ r.created_at.strftime('%d %b %Y') }}</td>
+        <td style="text-align:center">{{ r.lanes|length }}</td>
+        <td>
+          {% if true %}
+          <div class="table-actions">
+            <form method="POST" action="{{ url_for('rfq.approve_rfq', rfq_id=r.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-success btn-sm">✓ Approve</button>
+            </form>
+            <form method="POST" action="{{ url_for('rfq.reject_rfq', rfq_id=r.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Reject this RFQ?')">✕ Reject</button>
+            </form>
+          </div>
+          {% else %}
+          <span style="color:var(--text-3);font-size:12px">No permission</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state"><div class="empty-icon">✅</div><h3>No pending approvals</h3><p>All RFQs are up to date</p></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

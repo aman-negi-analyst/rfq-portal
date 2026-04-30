@@ -1,0 +1,63 @@
+import os
+import logging
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+class Config:
+    # ── Required ──────────────────────────────────────────
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+
+    # ── Database ──────────────────────────────────────────
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        'DATABASE_URL',
+        'sqlite:///' + os.path.join(BASE_DIR, 'rfq_portal.db')
+    )
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # ── Session ───────────────────────────────────────────
+    PERMANENT_SESSION_LIFETIME = 86400
+    SESSION_COOKIE_HTTPONLY    = True
+    SESSION_COOKIE_SAMESITE    = 'Lax'
+    SESSION_COOKIE_SECURE      = False
+    SESSION_COOKIE_NAME        = 'rfq_session'
+
+    # ── Uploads ───────────────────────────────────────────
+    UPLOAD_FOLDER     = os.path.join(BASE_DIR, 'uploads', 'schedules')
+    MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB
+    ALLOWED_EXTENSIONS = {'pdf', 'xlsx', 'xls', 'csv', 'doc', 'docx'}
+
+    # ── CSRF ──────────────────────────────────────────────
+    WTF_CSRF_TIME_LIMIT    = 3600
+    WTF_CSRF_SSL_STRICT    = False
+    WTF_CSRF_METHODS       = {'POST', 'PUT', 'PATCH', 'DELETE'}
+    WTF_CSRF_CHECK_DEFAULT = True
+
+    # ── Environment ───────────────────────────────────────
+    FLASK_ENV  = os.environ.get('FLASK_ENV', 'development')
+    IS_PROD    = os.environ.get('FLASK_ENV') == 'production'
+    BASE_URL   = os.environ.get('BASE_URL', 'http://localhost:5000')
+
+    @staticmethod
+    def validate():
+        if not os.environ.get('SECRET_KEY'):
+            raise RuntimeError(
+                'SECRET_KEY environment variable is not set.\n'
+                'Generate one: python -c "import secrets; print(secrets.token_hex(32))"'
+            )
+
+    @staticmethod
+    def init_dirs():
+        upload_dir = os.path.join(BASE_DIR, 'uploads', 'schedules')
+        os.makedirs(upload_dir, exist_ok=True)

@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}Round Comparison{% endblock %}
+{% block topbar_title %}Round 1 vs Round 2 Comparison{% endblock %}
+{% block topbar_sub %}How much vendors reduced their rates after negotiation{% endblock %}
+
+{% block content %}
+{% if report %}
+<div style='display:flex;justify-content:flex-end;margin-bottom:16px'>
+  <a href="{{ url_for('reports.export_round_comparison') }}" class="btn btn-secondary">⬇ Export CSV</a>
+</div>
+{% for item in report %}
+<div class="card" style="margin-bottom:24px">
+  <!-- RFQ Header -->
+  <div style="padding:14px 20px;background:linear-gradient(135deg,#f0fdf9,#e6f7f4);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span style="background:#0a8a6e;color:#fff;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700">{{ item.rfq.rfq_id }}</span>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:15px">{{ item.rfq.subject }}</div>
+      <div style="font-size:12px;color:var(--text-2);margin-top:2px">{{ item.rfq.zone or '—' }} · {{ item.rfq.vertical or '—' }}</div>
+    </div>
+    <div style="display:flex;gap:20px;text-align:right">
+      <div><div style="font-size:10px;color:var(--text-2);text-transform:uppercase">Avg R1 Rate</div><div style="font-weight:700;color:#374151">₹{{ '{:,.0f}'.format(item.avg_r1) }}</div></div>
+      <div><div style="font-size:10px;color:var(--text-2);text-transform:uppercase">Avg R2 Rate</div><div style="font-weight:700;color:#0891b2">₹{{ '{:,.0f}'.format(item.avg_r2) }}</div></div>
+      <div><div style="font-size:10px;color:var(--text-2);text-transform:uppercase">Avg Reduction</div><div style="font-weight:800;color:#059669">₹{{ '{:,.0f}'.format(item.avg_reduction) }}</div></div>
+    </div>
+  </div>
+
+  {% for v in item.vendors %}
+  <div style="border-bottom:1px solid #f3f4f6">
+    <!-- Vendor Summary Row -->
+    <div style="padding:10px 20px;background:{% if v.participated_r2 %}#fafffe{% else %}#fafafa{% endif %};display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer" onclick="toggleVendor('{{ item.rfq.id }}_{{ loop.index }}')">
+      <div style="font-weight:700;font-size:14px;flex:1">{{ v.vendor }}</div>
+      {% if not v.participated_r2 %}
+      <span style="background:#f3f4f6;color:#6b7280;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600">Did not participate in Round 2</span>
+      {% else %}
+      <div style="display:flex;gap:16px;align-items:center;font-size:13px;flex-wrap:wrap">
+        <span style="color:var(--text-2)">R1: <strong>₹{{ '{:,.0f}'.format(v.r1_total) }}</strong></span>
+        <span style="color:#0891b2">R2: <strong>₹{{ '{:,.0f}'.format(v.r2_total) }}</strong></span>
+        {% if v.reduction > 0 %}
+        <span style="background:#ecfdf5;color:#059669;font-weight:700;border-radius:6px;padding:3px 10px">▼ ₹{{ '{:,.0f}'.format(v.reduction) }} ({{ v.reduction_pct }}%)</span>
+        {% elif v.reduction < 0 %}
+        <span style="background:#fef2f2;color:#dc2626;font-weight:700;border-radius:6px;padding:3px 10px">▲ ₹{{ '{:,.0f}'.format(v.reduction|abs) }} increased</span>
+        {% else %}
+        <span style="background:#f3f4f6;color:#6b7280;font-weight:600;border-radius:6px;padding:3px 10px">No change</span>
+        {% endif %}
+      </div>
+      {% endif %}
+      <span style="font-size:12px;color:var(--text-2)">▼</span>
+    </div>
+
+    <!-- Lane Details (collapsible) -->
+    <div id="vendor_{{ item.rfq.id }}_{{ loop.index }}" style="display:none">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f9fafb">
+            <th style="padding:8px 28px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2)">Lane</th>
+            <th style="padding:8px 14px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2)">Round 1</th>
+            <th style="padding:8px 14px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2)">Round 2</th>
+            <th style="padding:8px 14px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2)">Reduction</th>
+            <th style="padding:8px 14px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2)">Change %</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for l in v.lanes %}
+        <tr style="border-top:1px solid #f3f4f6">
+          <td style="padding:9px 28px;font-weight:500">{{ l.lane.lane_name }}</td>
+          <td style="padding:9px 14px;text-align:right;color:var(--text-2)">{% if l.r1_cost %}₹{{ '{:,.0f}'.format(l.r1_cost) }}{% else %}—{% endif %}</td>
+          <td style="padding:9px 14px;text-align:right;color:#0891b2;font-weight:600">{% if l.r2_cost %}₹{{ '{:,.0f}'.format(l.r2_cost) }}{% else %}<span style="color:#9ca3af;font-size:11px">No bid</span>{% endif %}</td>
+          <td style="padding:9px 14px;text-align:right">
+            {% if l.diff is not none %}
+              {% if l.diff > 0 %}<span style="color:#059669;font-weight:700">▼ ₹{{ '{:,.0f}'.format(l.diff) }}</span>
+              {% elif l.diff < 0 %}<span style="color:#dc2626;font-weight:700">▲ ₹{{ '{:,.0f}'.format(l.diff|abs) }}</span>
+              {% else %}<span style="color:#6b7280">No change</span>{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td style="padding:9px 14px;text-align:center">
+            {% if l.diff_pct is not none %}
+            <span style="font-weight:700;color:{% if l.diff_pct > 0 %}#059669{% elif l.diff_pct < 0 %}#dc2626{% else %}#6b7280{% endif %}">
+              {{ l.diff_pct|abs }}%
+            </span>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card" style="padding:48px;text-align:center;color:var(--text-2)">
+  <div style="font-size:40px;margin-bottom:12px">🔄</div>
+  <div style="font-weight:600;margin-bottom:6px">No Round 2 data yet</div>
+  <div style="font-size:13px">Comparison will appear once at least one RFQ has completed Round 2 negotiation.</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleVendor(id) {
+  var el = document.getElementById('vendor_' + id);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% block title %}Settings — RFQ Portal{% endblock %}
+{% block topbar_title %}Settings{% endblock %}
+{% block topbar_sub %}Configure email and system preferences{% endblock %}
+
+{% block content %}
+<div class="two-col" style="align-items:start;gap:20px">
+
+  <!-- LEFT: Email Configuration -->
+  <div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <h3>📧 Gmail Auto-Mailer</h3>
+        {% if cfg.is_active and cfg.gmail_address %}
+        <span class="badge badge-approved" style="font-size:11px">
+          <span class="pulse-dot"></span> Active
+        </span>
+        {% else %}
+        <span class="badge badge-draft" style="font-size:11px">Not Configured</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+
+        <div class="info-box" style="margin-bottom:20px">
+          <strong>How it works:</strong><br>
+          When a Manager <strong>approves an RFQ</strong>, the system automatically finds all
+          <strong>active vendors matching the RFQ region</strong> and sends them a bidding invitation email.
+        </div>
+
+        <form method="POST" action="{{ url_for('admin.settings') }}" id="settings-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" id="form-action" value="save">
+
+          <div class="form-group">
+            <label>Gmail Address *</label>
+            <input type="email" name="gmail_address" id="gmail-addr"
+                   value="{{ cfg.gmail_address or '' }}"
+                   placeholder="yourname@gmail.com" required/>
+            <p style="font-size:11px;margin-top:4px;color:var(--text-2)">
+              The Gmail account that will send emails to vendors.
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label>Gmail App Password *</label>
+            <div style="position:relative">
+              <input type="password" name="gmail_password" id="gmail-pw"
+                     value="{{ cfg.gmail_password or '' }}"
+                     placeholder="xxxx xxxx xxxx xxxx"/>
+              <button type="button" onclick="togglePw()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);font-size:13px" id="pw-toggle">Show</button>
+            </div>
+            <p style="font-size:11px;margin-top:4px;color:var(--text-2)">
+              This is <strong>NOT</strong> your regular Gmail password.
+              See setup guide below ↓
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label>Sender Name</label>
+            <input type="text" name="sender_name"
+                   value="{{ cfg.sender_name or 'AYZ Company — RFQ Portal' }}"
+                   placeholder="AYZ Company — RFQ Portal"/>
+            <p style="font-size:11px;margin-top:4px;color:var(--text-2)">
+              This name appears in the "From" field of all emails.
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label>Portal Base URL *</label>
+            <input type="text" name="base_url"
+                   value="{{ cfg.base_url or 'http://localhost:5000' }}"
+                   placeholder="http://192.168.1.5:5000"/>
+            <p style="font-size:11px;margin-top:4px;color:var(--text-2)">
+              The URL vendors will use to open the quote form.
+              Run <code style="background:#f3f4f6;padding:1px 5px;border-radius:3px">ipconfig</code>
+              in CMD to find your IP → set as
+              <code style="background:#f3f4f6;padding:1px 5px;border-radius:3px">http://YOUR_IP:5000</code>
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" name="is_active" value="1"
+                     {% if cfg.is_active %}checked{% endif %}
+                     style="width:16px;height:16px;accent-color:var(--accent)"/>
+              Enable Auto-Mailer (send emails on RFQ approval)
+            </label>
+          </div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
+            <button type="submit" class="btn btn-primary"
+                    onclick="document.getElementById('form-action').value='save'">
+              💾 Save Settings
+            </button>
+
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Setup Guide -->
+    <div class="card">
+      <div class="card-header"><h3>🔑 How to Get Gmail App Password</h3></div>
+      <div class="card-body">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</div>
+            <div>
+              <div style="font-weight:600;font-size:13px">Enable 2-Step Verification</div>
+              <div style="font-size:12px;color:var(--text-2);margin-top:2px">Go to <a href="https://myaccount.google.com/security" target="_blank" style="color:var(--accent)">myaccount.google.com/security</a> → Turn on 2-Step Verification</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</div>
+            <div>
+              <div style="font-weight:600;font-size:13px">Go to App Passwords</div>
+              <div style="font-size:12px;color:var(--text-2);margin-top:2px">Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--accent)">myaccount.google.com/apppasswords</a></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">3</div>
+            <div>
+              <div style="font-weight:600;font-size:13px">Create App Password</div>
+              <div style="font-size:12px;color:var(--text-2);margin-top:2px">Select app → <strong>Mail</strong> → Select device → <strong>Windows Computer</strong> → Click <strong>Generate</strong></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start">
+            <div style="width:26px;height:26px;border-radius:50%;background:var(--success);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">4</div>
+            <div>
+              <div style="font-weight:600;font-size:13px">Copy the 16-character password</div>
+              <div style="font-size:12px;color:var(--text-2);margin-top:2px">It looks like: <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:11px">abcd efgh ijkl mnop</code> → Paste it above</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Email Logs -->
+  <div>
+    <div class="card">
+      <div class="card-header">
+        <h3>📋 Email Send Log</h3>
+        <span style="font-size:12px;color:var(--text-2)">Last 20 sends</span>
+      </div>
+      {% if logs %}
+      <div style="padding:0">
+        {% for log in logs %}
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                {{ log.rfq_subject or '—' }}
+              </div>
+              <div style="font-size:11px;color:var(--text-2);margin-top:3px">
+                Sent to <strong>{{ log.vendor_count }}</strong> vendor{{ 's' if log.vendor_count != 1 }} ·
+                {{ log.sent_at.strftime('%d %b %Y, %H:%M') }} ·
+                by {{ log.sent_by or '—' }}
+              </div>
+              {% if log.error_msg %}
+              <div style="font-size:11px;color:var(--danger);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ log.error_msg }}">
+                ⚠ {{ log.error_msg[:80] }}{% if log.error_msg|length > 80 %}…{% endif %}
+              </div>
+              {% endif %}
+            </div>
+            <span class="badge {% if log.status=='sent' %}badge-approved{% elif log.status=='partial' %}badge-pending{% else %}badge-rejected{% endif %}" style="font-size:10px;flex-shrink:0">
+              {{ log.status|capitalize }}
+            </span>
+          </div>
+          {% if log.sent_to and log.status in ['sent','partial'] %}
+          <details style="margin-top:6px">
+            <summary style="font-size:11px;color:var(--accent);cursor:pointer">View recipients</summary>
+            <div style="font-size:11px;color:var(--text-2);margin-top:4px;line-height:1.8">
+              {{ log.sent_to }}
+            </div>
+          </details>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding:40px">
+        <div class="empty-icon">📭</div>
+        <h3>No emails sent yet</h3>
+        <p>Email logs will appear here after the first RFQ approval with auto-mailer enabled.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePw() {
+  var inp = document.getElementById('gmail-pw');
+  var btn = document.getElementById('pw-toggle');
+  if (inp.type === 'password') { inp.type = 'text';     btn.textContent = 'Hide'; }
+  else                         { inp.type = 'password'; btn.textContent = 'Show'; }
+}
+
+</script>
+{% endblock %}

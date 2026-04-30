@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Vendor Participation{% endblock %}
+{% block topbar_title %}Vendor Participation Report{% endblock %}
+{% block topbar_sub %}Who responds, who ignores, and who wins{% endblock %}
+{% block content %}
+
+<!-- Stats -->
+{% set total = data|length %}
+{% set excellent = data|selectattr('status','eq','Excellent')|list|length %}
+{% set good = data|selectattr('status','eq','Good')|list|length %}
+{% set poor = data|selectattr('status','eq','Poor')|list|length %}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+  <div style="background:linear-gradient(135deg,#0a8a6e,#0ea882);border-radius:12px;padding:16px 20px;color:#fff">
+    <div style="font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Active Vendors</div>
+    <div style="font-size:28px;font-weight:800">{{ total }}</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#059669,#10b981);border-radius:12px;padding:16px 20px;color:#fff">
+    <div style="font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Excellent (80%+)</div>
+    <div style="font-size:28px;font-weight:800">{{ excellent }}</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#d97706,#f59e0b);border-radius:12px;padding:16px 20px;color:#fff">
+    <div style="font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Good (50-79%)</div>
+    <div style="font-size:28px;font-weight:800">{{ good }}</div>
+  </div>
+  <div style="background:linear-gradient(135deg,#dc2626,#ef4444);border-radius:12px;padding:16px 20px;color:#fff">
+    <div style="font-size:10px;opacity:.8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Poor (below 50%)</div>
+    <div style="font-size:28px;font-weight:800">{{ poor }}</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3>📊 Vendor Response Analysis</h3><a href="{{ url_for('reports.export_vendor_scorecard') }}" class="btn btn-secondary btn-sm">⬇ Export</a></div>
+  {% if data %}
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#f9fafb">
+        {% for h in ['Vendor','Region','Invited','Responded','Not Responded','Response Rate','Wins','R2 Participation','Last Activity','Status'] %}
+        <th style="padding:10px 14px;text-align:{% if loop.index==1 %}left{% else %}center{% endif %};font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-2);border-bottom:2px solid var(--border)">{{ h }}</th>
+        {% endfor %}
+      </tr></thead>
+      <tbody>
+      {% for d in data %}
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:10px 14px">
+          <div style="font-weight:700">{{ d.vendor.name }}</div>
+          <div style="font-size:11px;color:#9ca3af">{{ d.vendor.email or '' }}</div>
+        </td>
+        <td style="padding:10px 14px;text-align:center;color:#6b7280;font-size:12px">{{ d.vendor.region or '—' }}</td>
+        <td style="padding:10px 14px;text-align:center;font-weight:600">{{ d.invited }}</td>
+        <td style="padding:10px 14px;text-align:center;color:#059669;font-weight:600">{{ d.responded }}</td>
+        <td style="padding:10px 14px;text-align:center;color:#dc2626;font-weight:600">{{ d.not_responded }}</td>
+        <td style="padding:10px 14px;text-align:center">
+          <div style="display:flex;align-items:center;justify-content:center;gap:6px">
+            <div style="width:60px;height:6px;background:#f3f4f6;border-radius:99px;overflow:hidden">
+              <div style="height:100%;background:{% if d.response_rate>=80 %}#059669{% elif d.response_rate>=50 %}#d97706{% else %}#dc2626{% endif %};width:{{ d.response_rate }}%"></div>
+            </div>
+            <span style="font-weight:700;color:{% if d.response_rate>=80 %}#059669{% elif d.response_rate>=50 %}#d97706{% else %}#dc2626{% endif %}">{{ d.response_rate }}%</span>
+          </div>
+        </td>
+        <td style="padding:10px 14px;text-align:center"><span style="background:#ecfdf5;color:#059669;border-radius:6px;padding:2px 8px;font-weight:700">{{ d.wins }}</span></td>
+        <td style="padding:10px 14px;text-align:center;color:#6b7280">{{ d.r2 }}</td>
+        <td style="padding:10px 14px;text-align:center;color:#9ca3af;font-size:11px">{{ d.last_activity.strftime('%d %b %Y') if d.last_activity else 'Never' }}</td>
+        <td style="padding:10px 14px;text-align:center">
+          <span style="background:{% if d.status=='Excellent' %}#ecfdf5{% elif d.status=='Good' %}#fffbeb{% else %}#fef2f2{% endif %};color:{% if d.status=='Excellent' %}#059669{% elif d.status=='Good' %}#d97706{% else %}#dc2626{% endif %};border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">
+            {{ d.status }}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:40px;text-align:center;color:#9ca3af"><div style="font-size:36px;margin-bottom:10px">📊</div>No data yet</div>
+  {% endif %}
+</div>
+{% endblock %}

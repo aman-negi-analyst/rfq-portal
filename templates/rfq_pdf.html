@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ rfq.rfq_id }} — {{ rfq.subject }}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;font-size:13px;color:#111;background:#fff;padding:20px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0a8a6e;padding-bottom:16px;margin-bottom:20px}
+.logo-area img{height:50px;object-fit:contain}
+.rfq-title{font-size:20px;font-weight:700;margin-bottom:4px}
+.meta{font-size:12px;color:#555}
+.badge{display:inline-block;background:#0a8a6e;color:#fff;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;margin-right:6px}
+.section-title{font-size:14px;font-weight:700;background:#f3f4f6;padding:8px 12px;border-left:4px solid #0a8a6e;margin:16px 0 8px}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px}
+th{background:#0a8a6e;color:#fff;padding:7px 10px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase}
+td{padding:7px 10px;border-bottom:1px solid #e5e7eb}
+tr:nth-child(even) td{background:#f9fafb}
+.l1{background:#059669;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700}
+.l2{background:#6b7280;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700}
+.l3{background:#7c3aed;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700}
+.winner-row td{background:#ecfdf5;font-weight:600}
+.footer{margin-top:24px;border-top:1px solid #e5e7eb;padding-top:12px;font-size:11px;color:#9ca3af;display:flex;justify-content:space-between}
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.info-cell{background:#f9fafb;border-radius:6px;padding:8px 10px}
+.info-label{font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-bottom:3px}
+.info-value{font-size:13px;font-weight:600;color:#111}
+.no-print{display:flex;gap:10px;margin-bottom:20px}
+.btn{padding:10px 20px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
+.btn-print{background:#0a8a6e;color:#fff}
+.btn-back{background:#f3f4f6;color:#374151;text-decoration:none;display:inline-flex;align-items:center}
+@media print{
+  .no-print{display:none}
+  body{padding:10px}
+}
+</style>
+</head>
+<body>
+
+<div class="no-print">
+  <button class="btn btn-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
+  <a href="/rfqs/{{ rfq.id }}" class="btn btn-back">← Back to RFQ</a>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <img src="/static/shadowfax_logo.jpg" alt="Shadowfax">
+  </div>
+  <div style="text-align:right">
+    <div class="rfq-title">{{ rfq.rfq_id }}: {{ rfq.subject }}</div>
+    <div class="meta">
+      <span class="badge">{{ rfq.status }}</span>
+      {% if rfq.zone %}<span class="badge" style="background:#4f46e5">{{ rfq.zone }}</span>{% endif %}
+      {% if rfq.vertical %}<span class="badge" style="background:#d97706">{{ rfq.vertical }}</span>{% endif %}
+    </div>
+    <div class="meta" style="margin-top:6px">Generated: {{ generated_at.strftime('%d %b %Y %H:%M') }}</div>
+  </div>
+</div>
+
+<!-- RFQ Info -->
+<div class="section-title">RFQ Information</div>
+<div class="info-grid">
+  <div class="info-cell"><div class="info-label">Deadline</div><div class="info-value">{{ rfq.deadline.strftime('%d %b %Y') if rfq.deadline else '—' }}</div></div>
+  <div class="info-cell"><div class="info-label">Created By</div><div class="info-value">{{ rfq.created_by or '—' }}</div></div>
+  <div class="info-cell"><div class="info-label">Approved By</div><div class="info-value">{{ rfq.approved_by or 'Pending' }}</div></div>
+  <div class="info-cell"><div class="info-label">Total Lanes</div><div class="info-value">{{ rfq.lanes|length }}</div></div>
+  <div class="info-cell"><div class="info-label">Total Guideline</div><div class="info-value">₹{{ '{:,.0f}'.format(rfq.lanes|sum(attribute='guideline_cost')) }}</div></div>
+  <div class="info-cell"><div class="info-label">Total Quotes</div><div class="info-value">{{ quotes|length }}</div></div>
+</div>
+{% if rfq.notes %}
+<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px"><strong>Notes:</strong> {{ rfq.notes }}</div>
+{% endif %}
+
+<!-- Lane Details -->
+<div class="section-title">Lane Details</div>
+<table>
+  <thead><tr>
+    <th>#</th><th>Lane Name</th><th>Cities</th><th>Vehicle</th><th>KMs</th>
+    <th>Frequency</th><th>Effective Date</th><th>Guideline Cost</th>
+  </tr></thead>
+  <tbody>
+  {% for lane in rfq.lanes %}
+  <tr>
+    <td>{{ loop.index }}</td>
+    <td><strong>{{ lane.lane_name }}</strong><br><span style="color:#9ca3af;font-size:10px">{{ lane.lane_code or '' }}</span></td>
+    <td>{{ lane.cities or '—' }}</td>
+    <td>{{ lane.vehicle_type or '—' }}</td>
+    <td>{{ lane.kms|int if lane.kms else '—' }}</td>
+    <td>{{ lane.frequency or '—' }}</td>
+    <td>{{ lane.effective_date or '—' }}</td>
+    <td><strong>{% if lane.guideline_cost %}₹{{ '{:,.0f}'.format(lane.guideline_cost) }}{% else %}—{% endif %}</strong></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<!-- Vendor Quotes -->
+{% if quotes %}
+<div class="section-title">Vendor Quotes — Lane-wise Ranking</div>
+{% for lane in rfq.lanes %}
+{% set lq = quotes|selectattr('lane_id','eq',lane.id)|sort(attribute='quoted_cost')|list %}
+{% if lq %}
+<div style="font-size:12px;font-weight:700;color:#0a8a6e;margin:8px 0 4px">{{ loop.index }}. {{ lane.lane_name }} {% if lane.guideline_cost %}<span style="font-weight:400;color:#6b7280">— Guideline: ₹{{ '{:,.0f}'.format(lane.guideline_cost) }}</span>{% endif %}</div>
+<table>
+  <thead><tr><th>Rank</th><th>Vendor</th><th>Quoted Rate</th><th>CPK</th><th>vs Guideline</th><th>Submitted</th></tr></thead>
+  <tbody>
+  {% for q in lq %}
+  {% set rank = loop.index %}
+  {% set won = winner_map.get(lane.id) %}
+  <tr {% if won and won.vendor_name == q.vendor_name %}class="winner-row"{% endif %}>
+    <td><span class="{% if rank==1 %}l1{% elif rank==2 %}l2{% elif rank==3 %}l3{% endif %}">L{{ rank }}</span>
+    {% if won and won.vendor_name == q.vendor_name %} 🏆{% endif %}</td>
+    <td>{{ q.vendor_name }}</td>
+    <td><strong>₹{{ '{:,.0f}'.format(q.quoted_cost) }}</strong></td>
+    <td>{{ '₹%.2f'|format(q.quoted_cpk) if q.quoted_cpk else '—' }}</td>
+    <td>{% if lane.guideline_cost %}{% set d = q.quoted_cost - lane.guideline_cost %}{% if d < 0 %}<span style="color:#059669">▼ ₹{{ '{:,.0f}'.format(d|abs) }}</span>{% elif d > 0 %}<span style="color:#dc2626">▲ ₹{{ '{:,.0f}'.format(d) }}</span>{% else %}—{% endif %}{% else %}—{% endif %}</td>
+    <td style="color:#9ca3af;font-size:10px">{{ q.submitted_at.strftime('%d %b %Y') if q.submitted_at else '—' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endfor %}
+{% endif %}
+
+<!-- Winner Summary -->
+{% if winner_map %}
+<div class="section-title">🏆 Award Summary</div>
+<table>
+  <thead><tr><th>Lane</th><th>Winner Vendor</th><th>Awarded Rate</th><th>RCA</th></tr></thead>
+  <tbody>
+  {% set total_awarded = namespace(val=0) %}
+  {% for lane in rfq.lanes %}
+  {% set w = winner_map.get(lane.id) %}
+  {% if w %}
+  {% set total_awarded.val = total_awarded.val + (w.final_cost or 0) %}
+  <tr class="winner-row">
+    <td>{{ lane.lane_name }}</td>
+    <td><strong>{{ w.vendor_name }}</strong></td>
+    <td><strong>₹{{ '{:,.0f}'.format(w.final_cost) if w.final_cost else '—' }}</strong></td>
+    <td style="font-size:11px;color:#6b7280">{{ w.rca_reason or '—' }}</td>
+  </tr>
+  {% endif %}
+  {% endfor %}
+  <tr><td colspan="2"><strong>Total Awarded Cost</strong></td><td colspan="2"><strong style="color:#059669">₹{{ '{:,.0f}'.format(total_awarded.val) }}</strong></td></tr>
+  </tbody>
+</table>
+{% endif %}
+
+<div class="footer">
+  <span>Shadowfax RFQ Portal — Confidential</span>
+  <span>{{ rfq.rfq_id }} — Printed on {{ generated_at.strftime('%d %b %Y') }}</span>
+</div>
+
+</body>
+</html>
