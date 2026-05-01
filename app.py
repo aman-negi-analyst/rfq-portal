@@ -145,6 +145,24 @@ def init_db(app: Flask) -> None:
 
 app = create_app()
 @app.route('/init-db-secret-endpoint')
+@app.route('/reset-admin-password-secret')
+def reset_admin_password():
+    """Reset admin password - use once then remove this route"""
+    from models import User
+    from utils.helpers import hash_pw
+    import secrets as _s
+    
+    # Find admin user
+    admin = User.query.filter_by(role='Admin').first()
+    if not admin:
+        return "No admin user found!", 404
+    
+    # Generate new password
+    new_pw = _s.token_urlsafe(12)
+    admin.password = hash_pw(new_pw)
+    db.session.commit()
+    
+    return f"✅ Admin password reset!<br>Email: {admin.email}<br>New password: {new_pw}<br><br>⚠️ Save this password!"
 def init_database():
     """One-time database initialization endpoint for Railway"""
     from models import User
