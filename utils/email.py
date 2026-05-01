@@ -1,19 +1,19 @@
-import os, re, secrets, smtplib, threading, traceback, logging
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
+import os, re, secrets, threading, traceback, logging
+import resend
 
 from flask import current_app
-import sys, os
+import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.helpers import decrypt_password
 
 from extensions import db
 from models import (Vendor, EmailSettings, EmailLog, QuoteToken,
                     LaneWinner, Lane, RFQ, Round2Token, now_ist)
 
 logger = logging.getLogger(__name__)
+
+# Initialise Resend API key from environment
+resend.api_key = os.environ.get("RESEND_API_KEY", "")
+
 
 def send_rfq_emails(rfq_id, rfq_subject, rfq_zone, rfq_rfq_id,
                     rfq_deadline_str, sent_by_name, lanes_data=None,
@@ -25,7 +25,7 @@ def send_rfq_emails(rfq_id, rfq_subject, rfq_zone, rfq_rfq_id,
         with _captured_app.app_context():
             try:
                 settings = EmailSettings.query.filter_by(is_active=1).first()
-                if not settings or not settings.gmail_address or not settings.gmail_password:
+                if not settings or not settings.gmail_address:
                     log = EmailLog(rfq_id=rfq_id, rfq_subject=rfq_subject,
                                    sent_to='', vendor_count=0, status='failed',
                                    error_msg='Email not configured. Go to Settings.',
@@ -41,49 +41,32 @@ def send_rfq_emails(rfq_id, rfq_subject, rfq_zone, rfq_rfq_id,
 
                 matched = []
                 pan_india_keywords = [
-                    # Pan India variations
                     'pan india', 'pan-india', 'panindia', 'pan_india', 'pan india ',
                     'pan indian', 'p.a.n india', 'pan  india',
-                    # All India variations
                     'all india', 'all-india', 'allindia', 'all_india',
                     'all over india', 'all over', 'all states',
-                    # National variations
                     'national', 'nationwide', 'nation wide', 'nation-wide',
                     'india', 'india wide', 'india-wide', 'entire india',
-                    # PAN abbreviation
                     'pan', 'p.i.',
                 ]
                 for v in all_vendors:
                     v_region_raw = (v.region or '').strip().lower()
-
-                    # Check pan india — check full string and each part
                     is_pan_india = v_region_raw in pan_india_keywords
 
-                    # Normalize ALL separators and clean up
                     import re as _re
-                    # Replace all separators: / , ; + & | _ (underscore) with /
                     normalized = _re.sub(r'[/,;+&|_]+', '/', v_region_raw)
-                    # Remove extra spaces
                     normalized = _re.sub(r'\s+', ' ', normalized).strip()
-                    # Remove spaces around slashes: "South / East" → "South/East"
                     normalized = _re.sub(r'\s*/\s*', '/', normalized)
-
-                    # Split into individual regions and clean each
                     v_regions = [r.strip() for r in normalized.split('/') if r.strip()]
 
-                    # Check if any part is pan india keyword
                     for part in v_regions:
                         if part in pan_india_keywords:
                             is_pan_india = True
                             break
 
-                    # Also check abbreviations like N/S/E/W
                     abbr_map = {'n': 'north', 's': 'south', 'e': 'east', 'w': 'west'}
-                    expanded_regions = []
-                    for r in v_regions:
-                        expanded_regions.append(abbr_map.get(r, r))
+                    expanded_regions = [abbr_map.get(r, r) for r in v_regions]
 
-                    # Match if RFQ zone found in vendor regions
                     region_match = rfq_region and (
                         rfq_region in expanded_regions or
                         rfq_region in v_regions
@@ -103,9 +86,12 @@ def send_rfq_emails(rfq_id, rfq_subject, rfq_zone, rfq_rfq_id,
                 sent_emails = []
                 failed      = []
 
-                server = smtplib.SMTP('smtp.gmail.com', 587)
-                server.starttls()
-                server.login(settings.gmail_address, decrypt_password(settings.gmail_password))
+                # Read schedule attachment once (base64 for Resend)
+                attachment_data = None
+                if schedule_path and os.path.exists(schedule_path):
+                    import base64
+                    with open(schedule_path, 'rb') as f:
+                        attachment_data = base64.b64encode(f.read()).decode('utf-8')
 
                 for v in matched:
                     if not v.email or '@' not in v.email:
@@ -126,29 +112,7 @@ def send_rfq_emails(rfq_id, rfq_subject, rfq_zone, rfq_rfq_id,
                         base_url   = (settings.base_url or os.environ.get('BASE_URL', 'http://localhost:5000')).rstrip('/')
                         quote_link = f'{base_url}/submit-quote/{rfq_rfq_id}/{token_str}'
 
-                        msg = MIMEMultipart('alternative')
-                        msg['Subject'] = f'RFQ Open for Bidding — {rfq_rfq_id}: {rfq_subject}'
-                        msg['From']    = f'{settings.sender_name} <{settings.gmail_address}>'
-                        msg['To']      = v.email
-
-                        plain = f"""Dear {v.name},
-
-We are pleased to inform you that a new RFQ is now open for bidding.
-
-RFQ ID    : {rfq_rfq_id}
-Subject   : {rfq_subject}
-Zone      : {rfq_zone or 'N/A'}
-Deadline  : {rfq_deadline_str}
-
-Click below to submit your quote:
-{quote_link}
-
-This is your personal link — do not share it.
-
-Regards,
-{settings.sender_name}"""
-
-                        # Build lane cards — one card per lane
+                        # ── Build lane cards ────────────────────────────────
                         def make_row(label, value, bg):
                             bg_style = "background:#f9fafb;" if bg else ""
                             return (
@@ -158,23 +122,21 @@ Regards,
                             )
 
                         lane_cards = ""
-                        lane_rows_plain = ""
                         if lanes_data:
                             for ln in lanes_data:
-                                code = ln.get("code", "")
-                                name = ln.get("name", "")
+                                code  = ln.get("code", "")
+                                name  = ln.get("name", "")
                                 title = (code + " — " + name) if code else name
-                                rows = (
-                                    make_row("Covered Cities",  ln.get("cities", ""),           True)  +
-                                    make_row("Vehicle Size",    ln.get("vehicle", ""),          False) +
-                                    make_row("Frequency",       ln.get("frequency", ""),        True)  +
-                                    make_row("Trip Type",       ln.get("lane_type", ""),        False) +
-                                    make_row("Distance (KMs)",  ln.get("kms", "") + " km",      True)  +
-                                    make_row("Fleet Count",     ln.get("fleet_count", ""),      False) +
-                                    make_row("No. of Drivers",  ln.get("no_of_drivers", ""),    True)  +
-                                    make_row("Effective Date",  ln.get("effective_date", ""),   False)
+                                rows  = (
+                                    make_row("Covered Cities",  ln.get("cities", ""),         True)  +
+                                    make_row("Vehicle Size",    ln.get("vehicle", ""),        False) +
+                                    make_row("Frequency",       ln.get("frequency", ""),      True)  +
+                                    make_row("Trip Type",       ln.get("lane_type", ""),      False) +
+                                    make_row("Distance (KMs)",  ln.get("kms", "") + " km",    True)  +
+                                    make_row("Fleet Count",     ln.get("fleet_count", ""),    False) +
+                                    make_row("No. of Drivers",  ln.get("no_of_drivers", ""),  True)  +
+                                    make_row("Effective Date",  ln.get("effective_date", ""), False)
                                 )
-                                guideline_row = ""
                                 lane_cards += (
                                     '<div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">'
                                     '<div style="background:#4f46e5;padding:9px 14px;color:#fff;font-size:13px;font-weight:700">'
@@ -184,20 +146,20 @@ Regards,
                                     + rows +
                                     '</table></div>'
                                 )
-                                lane_rows_plain += "  " + title + " | " + ln.get("cities","") + " | " + ln.get("vehicle","") + " | " + ln.get("frequency","") + "\n"
 
                         n_lanes = len(lanes_data) if lanes_data else 0
-                        plural = "s" if n_lanes != 1 else ""
+                        plural  = "s" if n_lanes != 1 else ""
                         lanes_table_html = (
                             '<div style="margin:20px 0">'
                             '<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#374151;margin-bottom:12px">'
                             + "Lane Details (" + str(n_lanes) + " Lane" + plural + ")" +
-                            '</div>'
-                            + lane_cards +
-                            '</div>'
+                            '</div>' + lane_cards + '</div>'
                         ) if lanes_data else ""
 
-                        schedule_note_html = '<p style="font-size:13px;color:#059669;margin:8px 0"><strong>📎 Schedule sheet attached</strong> — please review before submitting your rate.</p>' if schedule_path else ''
+                        schedule_note_html = (
+                            '<p style="font-size:13px;color:#059669;margin:8px 0">'
+                            '<strong>📎 Schedule sheet attached</strong> — please review before submitting your rate.</p>'
+                        ) if schedule_path else ''
 
                         html = f"""
 <html><body style="font-family:Arial,sans-serif;color:#1a1d23;max-width:650px;margin:0 auto;padding:20px">
@@ -237,28 +199,26 @@ Regards,
   </div>
 </body></html>"""
 
-                        msg.attach(MIMEText(plain, 'plain'))
-                        msg.attach(MIMEText(html,  'html'))
+                        # ── Send via Resend API ─────────────────────────────
+                        params = {
+                            "from": f"{settings.sender_name} <{settings.gmail_address}>",
+                            "to": [v.email],
+                            "subject": f"RFQ Open for Bidding — {rfq_rfq_id}: {rfq_subject}",
+                            "html": html,
+                        }
 
-                        # Attach schedule file if exists
-                        if schedule_path and os.path.exists(schedule_path):
-                            from email.mime.base import MIMEBase
-                            from email import encoders
-                            with open(schedule_path, 'rb') as f:
-                                part = MIMEBase('application', 'octet-stream')
-                                part.set_payload(f.read())
-                            encoders.encode_base64(part)
+                        if attachment_data:
                             attach_name = schedule_filename or os.path.basename(schedule_path)
-                            part.add_header('Content-Disposition', f'attachment; filename="{attach_name}"')
-                            msg.attach(part)
+                            params["attachments"] = [{
+                                "filename": attach_name,
+                                "content": attachment_data,
+                            }]
 
-                        server.sendmail(settings.gmail_address, v.email, msg.as_string())
+                        resend.Emails.send(params)
                         sent_emails.append(v.email)
 
                     except Exception as e:
                         failed.append(f"{v.email}: {str(e)}")
-
-                server.quit()
 
                 # Delete schedule file after sending
                 if delete_after_send and schedule_path and os.path.exists(schedule_path):
