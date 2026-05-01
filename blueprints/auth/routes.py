@@ -167,12 +167,15 @@ def dashboard():
     status_data = [draft, pending, approved, sent, closed, rejected]
     status_labels = ['Draft', 'Pending', 'Approved', 'Sent/Active', 'Closed', 'Rejected']
 
-    # ── Monthly RFQ trend (last 6 months) ──
+# ── Monthly RFQ trend (last 6 months) ──
     monthly_raw = db.session.query(
         func.to_char(RFQ.created_at, 'Mon').label('month'),
         func.to_char(RFQ.created_at, 'YYYY-MM').label('ym'),
         func.count(RFQ.id).label('count')
-    ).group_by(func.to_char(RFQ.created_at, 'YYYY-MM'))     .order_by(func.to_char(RFQ.created_at, 'YYYY-MM'))     .limit(6).all()
+    ).group_by(
+        func.to_char(RFQ.created_at, 'Mon'),
+        func.to_char(RFQ.created_at, 'YYYY-MM')
+    ).order_by(func.to_char(RFQ.created_at, 'YYYY-MM')).limit(6).all()
     monthly_labels = [r.month for r in monthly_raw]
     monthly_values = [r.count for r in monthly_raw]
 
