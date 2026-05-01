@@ -163,6 +163,21 @@ def reset_admin_password():
     db.session.commit()
     
     return f"✅ Admin password reset!<br>Email: {admin.email}<br>New password: {new_pw}<br><br>⚠️ Save this password!"
+
+
+@app.route('/migrate-database-secret')
+def migrate_database():
+    """Add thankyou_r2_sent column to PostgreSQL"""
+    try:
+        # Add the missing column
+        db.session.execute(db.text(
+            "ALTER TABLE rfqs ADD COLUMN IF NOT EXISTS thankyou_r2_sent BOOLEAN DEFAULT FALSE"
+        ))
+        db.session.commit()
+        return "✅ Database migration successful! Column thankyou_r2_sent added."
+    except Exception as e:
+        return f"❌ Migration failed: {str(e)}"
+
 def init_database():
     """One-time database initialization endpoint for Railway"""
     from models import User
