@@ -144,8 +144,41 @@ def init_db(app: Flask) -> None:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 app = create_app()
+@app.route('/init-db-secret-endpoint')
+def init_database():
+    """One-time database initialization endpoint for Railway"""
+    from models import User
+    from utils.helpers import hash_pw
+    import secrets as _s
+    
+    # Check if already initialized
+    existing_admin = User.query.filter_by(role='Admin').first()
+    if existing_admin:
+        return "Database already initialized. Admin user exists.", 400
+    
+    # Create all tables
+    db.create_all()
+    
+    # Create admin user
+    tmp_pw = _s.token_urlsafe(12)
+    admin_email = os.environ.get('ADMIN_EMAIL', 'admin@rfq.com')
+    
+    admin = User(
+        name='Admin',
+        email=admin_email,
+        password=hash_pw(tmp_pw),
+        role='Admin',
+        is_active=1,
+    )
+    db.session.add(admin)
+    db.session.commit()
+    
+    return f"✅ Database initialized!<br>Admin email: {admin.email}<br>Temporary password: {tmp_pw}<br><br>⚠️ Save this password and change it after first login!"
+
 
 if __name__ == '__main__':
+
+
     init_db(app)
     debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
     port       = int(os.environ.get('PORT', 5000))
