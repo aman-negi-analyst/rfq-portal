@@ -267,8 +267,14 @@ def rfq_pdf(rfq_id):
 @login_required
 def delete_rfq(rfq_id):
     rfq = RFQ.query.get_or_404(rfq_id)
-    # Delete related tokens manually to avoid constraint errors
+    # Delete in correct order to respect foreign key constraints
+    VendorQuote.query.filter_by(rfq_id=rfq_id).delete()
+    LaneWinner.query.filter_by(rfq_id=rfq_id).delete()
+    Round2Token.query.filter_by(rfq_id=rfq_id).delete()
     QuoteToken.query.filter_by(rfq_id=rfq_id).delete()
+    AuditLog.query.filter_by(rfq_id=rfq_id).delete()
+    Notification.query.filter(Notification.link.like(f'%/rfqs/{rfq_id}%')).delete(synchronize_session=False)
+    Lane.query.filter_by(rfq_id=rfq_id).delete()
     db.session.delete(rfq)
     db.session.commit()
     flash('RFQ deleted.', 'info')
