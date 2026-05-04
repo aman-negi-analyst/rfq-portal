@@ -18,6 +18,7 @@ from utils.helpers import (login_required, admin_required, hash_pw, check_pw,
                             add_notification_plain, add_audit, next_rfq_id,
                             allowed_file, unread_count, get_globals,
                             encrypt_password, decrypt_password)
+from utils.email import send_simple_email
 
 logger = logging.getLogger(__name__)
 
@@ -439,11 +440,6 @@ def send_quote_link_email(rfq_id):
             '</div>' + lane_cards + '</div>'
         ) if rfq.lanes else ''
 
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = 'RFQ Open for Bidding — ' + rfq.rfq_id + ': ' + rfq.subject
-        msg['From']    = settings.sender_name + ' <' + settings.gmail_address + '>'
-        msg['To']      = qt.vendor_email
-
         nl = chr(10)
         plain = (
             'Dear ' + qt.vendor_name + ',' + nl + nl +
@@ -484,14 +480,8 @@ def send_quote_link_email(rfq_id):
             '</div></body></html>'
         )
 
-        msg.attach(MIMEText(plain, 'plain'))
-        msg.attach(MIMEText(html,  'html'))
-
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(settings.gmail_address, settings.gmail_password)
-        server.sendmail(settings.gmail_address, qt.vendor_email, msg.as_string())
-        server.quit()
+        send_simple_email(settings, qt.vendor_email,
+            'RFQ Open for Bidding — ' + rfq.rfq_id + ': ' + rfq.subject, html)
 
         flash('✅ Email sent to ' + qt.vendor_name + ' (' + qt.vendor_email + ')', 'success')
     except Exception as e:

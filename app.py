@@ -97,9 +97,20 @@ def create_app(config_class=Config) -> Flask:
         flash('File too large. Maximum upload size is 10 MB.', 'error')
         return redirect(request.referrer or url_for('auth.dashboard')), 413
 
+    @app.errorhandler(405)
+    def error_405(e):
+        from flask import redirect, url_for
+        # POST to / is likely a login form submission with wrong action URL — redirect to login
+        if request.path == '/':
+            return redirect(url_for('auth.login'))
+        return render_template('error.html', code=405), 405
+
     @app.errorhandler(Exception)
     def error_generic(e):
         import traceback
+        from werkzeug.exceptions import HTTPException
+        if isinstance(e, HTTPException):
+            return render_template('error.html', code=e.code), e.code
         logger.error(f'Unhandled error: {e}\n{traceback.format_exc()}')
         return render_template('error.html', code=500), 500
 

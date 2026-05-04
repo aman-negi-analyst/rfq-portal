@@ -14,6 +14,18 @@ logger = logging.getLogger(__name__)
 # Initialise Resend API key from environment
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
 
+def send_simple_email(settings, to_email, subject, html_body):
+    """Send a single HTML email via Resend. Raises on failure."""
+    resend.api_key = os.environ.get("RESEND_API_KEY", "")
+    params = {
+        "from":    f"{settings.sender_name} <{settings.gmail_address}>",
+        "to":      [to_email],
+        "subject": subject,
+        "html":    html_body,
+    }
+    resend.Emails.send(params)
+
+
 
 def send_rfq_emails(rfq_id, rfq_subject, rfq_zone, rfq_rfq_id,
                     rfq_deadline_str, sent_by_name, lanes_data=None,

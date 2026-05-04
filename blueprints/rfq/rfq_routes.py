@@ -18,6 +18,7 @@ from utils.helpers import (login_required, admin_required, hash_pw, check_pw,
                             add_notification_plain, add_audit, next_rfq_id,
                             allowed_file, unread_count, get_globals,
                             decrypt_password)
+from utils.email import send_simple_email
 
 logger = logging.getLogger(__name__)
 
@@ -764,16 +765,8 @@ def extend_deadline(rfq_id):
     <p style="color:#6b7280;border-top:1px solid #e2e5ed;padding-top:16px;margin-top:24px">Regards,<br><strong>{settings.sender_name}</strong></p>
   </div>
 </body></html>"""
-                    msg = MIMEMultipart('alternative')
-                    msg['Subject'] = f'Deadline Extended — {rfq_obj.rfq_id}: {rfq_obj.subject}'
-                    msg['From']    = f'{settings.sender_name} <{settings.gmail_address}>'
-                    msg['To']      = qt.vendor_email
-                    msg.attach(MIMEText(html, 'html'))
-                    server = smtplib.SMTP('smtp.gmail.com', 587)
-                    server.starttls()
-                    server.login(settings.gmail_address, decrypt_password(settings.gmail_password))
-                    server.sendmail(settings.gmail_address, qt.vendor_email, msg.as_string())
-                    server.quit()
+                    send_simple_email(settings, qt.vendor_email,
+                        f'Deadline Extended — {rfq_obj.rfq_id}: {rfq_obj.subject}', html)
             except Exception as e:
                 logger.error(f'Deadline extension email error: {e}')
 

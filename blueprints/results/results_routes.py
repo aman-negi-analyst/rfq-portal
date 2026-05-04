@@ -19,6 +19,7 @@ from utils.helpers import (login_required, admin_required, hash_pw, check_pw,
                             add_notification_plain, add_audit, next_rfq_id,
                             allowed_file, unread_count, get_globals,
                             decrypt_password)
+from utils.email import send_simple_email
 
 logger = logging.getLogger(__name__)
 
@@ -271,16 +272,9 @@ def send_lane_winner_email(rfq_id, vendor_name, vendor_email, won_lanes, vendor_
   </div>
 </body></html>"""
 
-                msg = MIMEMultipart('alternative')
-                msg['Subject'] = f'Award Confirmation — {rfq_obj.rfq_id}: {rfq_obj.subject}'
-                msg['From']    = f'{settings.sender_name} <{settings.gmail_address}>'
-                msg['To']      = vendor_email
-                msg.attach(MIMEText(html, 'html'))
-                server = smtplib.SMTP('smtp.gmail.com', 587)
-                server.starttls()
-                server.login(settings.gmail_address, decrypt_password(settings.gmail_password))
-                server.sendmail(settings.gmail_address, vendor_email, msg.as_string())
-                server.quit()
+                send_simple_email(settings, vendor_email,
+                    f'Award Confirmation — {rfq_obj.rfq_id}: {rfq_obj.subject}', html)
+                logger.info(f'Lane winner email sent to {vendor_name} ({vendor_email})')
             except Exception as e:
                 logger.error(f'Lane winner email error: {e}')
     threading.Thread(target=_send, daemon=True).start()
@@ -345,18 +339,8 @@ def send_regret_email(rfq_id, vendor_name, vendor_email, closed_by):
   </div>
 </body></html>"""
 
-                msg = MIMEMultipart('alternative')
-                msg['Subject'] = f'RFQ Update — {rfq_obj.rfq_id}: {rfq_obj.subject}'
-                msg['From']    = f'{settings.sender_name} <{settings.gmail_address}>'
-                msg['To']      = vendor_email
-                msg.attach(MIMEText(html, 'html'))
-                
-                server = smtplib.SMTP('smtp.gmail.com', 587)
-                server.starttls()
-                server.login(settings.gmail_address, decrypt_password(settings.gmail_password))
-                server.sendmail(settings.gmail_address, vendor_email, msg.as_string())
-                server.quit()
-                
+                send_simple_email(settings, vendor_email,
+                    f'RFQ Update — {rfq_obj.rfq_id}: {rfq_obj.subject}', html)
                 logger.info(f'Regret email sent to {vendor_name} ({vendor_email}) for RFQ {rfq_obj.rfq_id}')
                 
             except Exception as e:
@@ -517,16 +501,8 @@ def send_thankyou_email(rfq_id):
     <p style="color:#6b7280;border-top:1px solid #e2e5ed;padding-top:16px;margin-top:24px">Regards,<br><strong>{settings.sender_name}</strong></p>
   </div>
 </body></html>"""
-                    msg = MIMEMultipart('alternative')
-                    msg['Subject'] = f'Thank You for Your Quote — {rfq_obj.rfq_id}'
-                    msg['From']    = f'{settings.sender_name} <{settings.gmail_address}>'
-                    msg['To']      = vemail
-                    msg.attach(MIMEText(html, 'html'))
-                    server = smtplib.SMTP('smtp.gmail.com', 587)
-                    server.starttls()
-                    server.login(settings.gmail_address, decrypt_password(settings.gmail_password))
-                    server.sendmail(settings.gmail_address, vemail, msg.as_string())
-                    server.quit()
+                    send_simple_email(settings, vemail,
+                        f'Thank You for Your Quote — {rfq_obj.rfq_id}', html)
                 rfq_obj.thankyou_sent = True
                 db.session.commit()
             except Exception as e:
@@ -575,18 +551,8 @@ def _send_r2_thankyou_to_vendor(rfq, vendor_name, vendor_email):
   </div>
 </body></html>"""
                 
-                msg = MIMEMultipart('alternative')
-                msg['Subject'] = f'Thank You for Your Round 2 Quote — {rfq_obj.rfq_id}'
-                msg['From']    = f'{settings.sender_name} <{settings.gmail_address}>'
-                msg['To']      = vendor_email
-                msg.attach(MIMEText(html, 'html'))
-                
-                server = smtplib.SMTP('smtp.gmail.com', 587)
-                server.starttls()
-                server.login(settings.gmail_address, decrypt_password(settings.gmail_password))
-                server.sendmail(settings.gmail_address, vendor_email, msg.as_string())
-                server.quit()
-                
+                send_simple_email(settings, vendor_email,
+                    f'Thank You for Your Round 2 Quote — {rfq_obj.rfq_id}', html)
                 logger.info(f'Round 2 thank you email sent to {vendor_name} ({vendor_email})')
                 
             except Exception as e:
@@ -709,18 +675,8 @@ def round2(rfq_id):
                     f"Regards,\n{settings.sender_name}"
                 )
 
-                msg = MIMEMultipart('alternative')
-                msg['Subject'] = f'Round 2 Quote Request — {rfq.rfq_id}: {rfq.subject}'
-                msg['From']    = f'{settings.sender_name} <{settings.gmail_address}>'
-                msg['To']      = vemail
-                msg.attach(MIMEText(plain, 'plain'))
-                msg.attach(MIMEText(html,  'html'))
-
-                server = smtplib.SMTP('smtp.gmail.com', 587)
-                server.starttls()
-                server.login(settings.gmail_address, decrypt_password(settings.gmail_password))
-                server.sendmail(settings.gmail_address, vemail, msg.as_string())
-                server.quit()
+                send_simple_email(settings, vemail,
+                    f'Round 2 Quote Request — {rfq.rfq_id}: {rfq.subject}', html)
                 sent_count += 1
                 logger.info(f'Round2 email sent to {vname} <{vemail}>')
 
