@@ -1,4 +1,4 @@
-import os, secrets, threading, logging
+import os, secrets, threading, logging, time
 from datetime import datetime, date, timedelta
 
 from flask import (Blueprint, render_template, request, redirect,
@@ -183,8 +183,11 @@ def send_thankyou_email(rfq_id):
     <p style="color:#6b7280;border-top:1px solid #e2e5ed;padding-top:16px;margin-top:24px">Regards,<br><strong>{settings.sender_name}</strong></p>
   </div>
 </body></html>"""
-                    send_simple_email(settings, vemail,
-                        f'Thank You for Your Quote — {rfq_obj.rfq_id}', html)
+                    try:
+                        send_simple_email(settings, vemail,
+                            f'Thank You for Your Quote — {rfq_obj.rfq_id}', html)
+                    except Exception as e:
+                        logger.error(f'Thankyou email error for {vname}: {e}')
                 rfq_obj.thankyou_sent = True
                 db.session.commit()
             except Exception as e:

@@ -1,4 +1,4 @@
-import os, re, secrets, threading, traceback, logging
+import os, re, secrets, threading, traceback, logging, time
 import resend
 
 from flask import current_app
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
 
 def send_simple_email(settings, to_email, subject, html_body):
-    """Send a single HTML email via Resend. Raises on failure."""
+    """Send a single HTML email via Resend. Retries once on rate limit."""
     resend.api_key = os.environ.get("RESEND_API_KEY", "")
     params = {
         "from":    f"{settings.sender_name} <{settings.gmail_address}>",
@@ -23,7 +23,17 @@ def send_simple_email(settings, to_email, subject, html_body):
         "subject": subject,
         "html":    html_body,
     }
-    resend.Emails.send(params)
+    try:
+        resend.Emails.send(params)
+    except Exception as e:
+        # If rate limited, wait 1s and retry once
+        if "Too many requests" in str(e) or "rate limit" in str(e).lower():
+            logger.warning(f"Resend rate limit hit sending to {to_email} — retrying in 1s")
+            time.sleep(1)
+            resend.Emails.send(params)
+        else:
+            raise
+    time.sleep(0.6)  # 0.6s gap = max ~1.6 emails/sec, safely under Resend's 2/sec limit
 
 
 
