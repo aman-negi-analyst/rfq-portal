@@ -44,6 +44,8 @@ def create_app(config_class=Config) -> Flask:
     from blueprints.auth.routes    import bp as auth_bp
     from blueprints.rfq.routes     import bp as rfq_bp
     from blueprints.results.routes import bp as results_bp
+    from blueprints.results.quotes import bp as quotes_bp
+    from blueprints.results.round2 import bp as round2_bp
     from blueprints.vendors.routes import bp as vendors_bp
     from blueprints.admin.routes   import bp as admin_bp
     from blueprints.reports.routes import bp as reports_bp
@@ -51,6 +53,8 @@ def create_app(config_class=Config) -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(rfq_bp)
     app.register_blueprint(results_bp)
+    app.register_blueprint(quotes_bp)
+    app.register_blueprint(round2_bp)
     app.register_blueprint(vendors_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(reports_bp)
@@ -128,12 +132,28 @@ def init_db(app: Flask) -> None:
 
         db.create_all()
 
-        # Migrate legacy roles
+        # Lightweight DB migrations for existing deployments without running Flask-Migrate
         try:
             db.session.execute(text("UPDATE users SET role='User' WHERE role IN ('Ops','Manager')"))
             db.session.commit()
         except Exception:
-            pass
+            db.session.rollback()
+
+        # Add columns that may be missing in older SQLite/Postgres databases
+        try:
+            dialect = db.engine.dialect.name
+            if dialect == 'sqlite':
+                cols = [row[1] for row in db.session.execute(text("PRAGMA table_info(rfqs)"))]
+            else:
+                cols = [row[0] for row in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='rfqs'"))]
+            if 'thankyou_r2_sent' not in cols:
+                db.session.execute(text("ALTER TABLE rfqs ADD COLUMN thankyou_r2_sent BOOLEAN DEFAULT FALSE"))
+            if 'deadline_closed' not in cols:
+                db.session.execute(text("ALTER TABLE rfqs ADD COLUMN deadline_closed BOOLEAN DEFAULT FALSE"))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.warning(f'Auto migration skipped/failed: {e}')
 
         # Create default admin if no users exist
         if not User.query.first():
@@ -155,75 +175,10 @@ def init_db(app: Flask) -> None:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 app = create_app()
-@app.route('/init-db-secret-endpoint')
-@app.route('/reset-admin-password-secret')
-def reset_admin_password():
-    """Reset admin password - use once then remove this route"""
-    from models import User
-    from utils.helpers import hash_pw
-    import secrets as _s
-    
-    # Find admin user
-    admin = User.query.filter_by(role='Admin').first()
-    if not admin:
-        return "No admin user found!", 404
-    
-    # Generate new password
-    new_pw = _s.token_urlsafe(12)
-    admin.password = hash_pw(new_pw)
-    db.session.commit()
-    
-    return f"✅ Admin password reset!<br>Email: {admin.email}<br>New password: {new_pw}<br><br>⚠️ Save this password!"
-
-
-@app.route('/migrate-database-secret')
-def migrate_database():
-    """Add thankyou_r2_sent column to PostgreSQL"""
-    try:
-        # Add the missing column
-        db.session.execute(db.text(
-            "ALTER TABLE rfqs ADD COLUMN IF NOT EXISTS thankyou_r2_sent BOOLEAN DEFAULT FALSE"
-        ))
-        db.session.commit()
-        return "✅ Database migration successful! Column thankyou_r2_sent added."
-    except Exception as e:
-        return f"❌ Migration failed: {str(e)}"
-
-def init_database():
-    """One-time database initialization endpoint for Railway"""
-    from models import User
-    from utils.helpers import hash_pw
-    import secrets as _s
-    
-    # Check if already initialized
-    existing_admin = User.query.filter_by(role='Admin').first()
-    if existing_admin:
-        return "Database already initialized. Admin user exists.", 400
-    
-    # Create all tables
-    db.create_all()
-    
-    # Create admin user
-    tmp_pw = _s.token_urlsafe(12)
-    admin_email = os.environ.get('ADMIN_EMAIL', 'admin@rfq.com')
-    
-    admin = User(
-        name='Admin',
-        email=admin_email,
-        password=hash_pw(tmp_pw),
-        role='Admin',
-        is_active=1,
-    )
-    db.session.add(admin)
-    db.session.commit()
-    
-    return f"✅ Database initialized!<br>Admin email: {admin.email}<br>Temporary password: {tmp_pw}<br><br>⚠️ Save this password and change it after first login!"
+init_db(app)
 
 
 if __name__ == '__main__':
-
-
-    init_db(app)
     debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
     port       = int(os.environ.get('PORT', 5000))
     # Production: use gunicorn instead — gunicorn -c gunicorn.conf.py app:app

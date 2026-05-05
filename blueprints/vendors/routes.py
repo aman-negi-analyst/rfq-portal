@@ -1,6 +1,5 @@
-import os, json, re as _re, secrets, smtplib, threading, traceback, logging
+import os, re as _re, secrets, threading, logging
 from datetime import datetime, date, timedelta
-from io import BytesIO
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, session, flash, jsonify, send_file, abort, make_response)
@@ -9,11 +8,9 @@ from extensions import db, csrf
 from models import (User, Vendor, RFQ, Lane, VendorQuote, Round2Token,
                     LaneWinner, AuditLog, Notification, EmailSettings,
                     EmailLog, QuoteToken, now_ist, to_ist)
-from utils.helpers import (login_required, admin_required, hash_pw, check_pw,
-                            is_rate_limited, record_attempt, clear_attempts,
-                            _login_attempts, LOGIN_MAX_ATTEMPTS,
+from utils.helpers import (login_required, admin_required,
                             add_notification, notify_managers,
-                            add_notification_plain, add_audit, next_rfq_id,
+                            add_notification_plain,
                             allowed_file, unread_count, get_globals)
 
 logger = logging.getLogger(__name__)
@@ -47,7 +44,10 @@ def vendors():
     if vendor_type: q = q.filter(Vendor.vendor_type.ilike(f'%{vendor_type}%'))
 
     total        = q.count()
-    vendors_list = q.order_by(Vendor.name).all()
+    page         = request.args.get('page', 1, type=int)
+    per_page     = 50
+    pagination   = q.order_by(Vendor.name).paginate(page=page, per_page=per_page, error_out=False)
+    vendors_list = pagination.items
 
     regions      = [r[0] for r in db.session.query(Vendor.region).distinct().filter(Vendor.region != None, Vendor.region != '').order_by(Vendor.region).all()]
     states       = [r[0] for r in db.session.query(Vendor.state).distinct().filter(Vendor.state != None, Vendor.state != '').order_by(Vendor.state).all()]
@@ -58,7 +58,8 @@ def vendors():
                            search=search, region=region, state=state, working=working,
                            fleet_type=fleet_type, vendor_type=vendor_type,
                            regions=regions, states=states,
-                           fleet_types=fleet_types, vendor_types=vendor_types, total=total)
+                           fleet_types=fleet_types, vendor_types=vendor_types,
+                           total=total, pagination=pagination, page=page, per_page=per_page)
 
 
 @bp.route('/vendors/import', methods=['POST'])

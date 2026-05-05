@@ -134,7 +134,7 @@
           <!-- Deadline still open -->
           <span style="background:#fffbeb;color:#d97706;border:1px solid #fde68a;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600">⏳ Deadline Open</span>
           {% if item.quote_count > 0 %}
-          <form method="POST" action="{{ url_for('results.close_deadline', rfq_id=r.id) }}" style="display:inline"
+          <form method="POST" action="{{ url_for('quotes.close_deadline', rfq_id=r.id) }}" style="display:inline"
                 onsubmit="if(!confirm('Close deadline for {{ r.rfq_id }}? Vendors will no longer be able to submit or revise quotes.')) return false; this.querySelector('button').disabled=true; this.querySelector('button').textContent='Closing...'; return true;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-danger btn-sm">🔒 Close Deadline</button>
@@ -147,7 +147,7 @@
             <span style="background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600">🔒 Deadline Closed</span>
 
             {% if not r.thankyou_sent %}
-            <form method="POST" action="{{ url_for('results.send_thankyou_email', rfq_id=r.id) }}" style="display:inline"
+            <form method="POST" action="{{ url_for('quotes.send_thankyou_email', rfq_id=r.id) }}" style="display:inline"
                   onsubmit="if(!confirm('Send Thank You emails to {{ item.quote_count }} vendor(s) who quoted?')) return false; this.querySelector('button').disabled=true; this.querySelector('button').textContent='Sending...'; return true;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-secondary btn-sm">🙏 Step 1: Send Thank You</button>
@@ -157,10 +157,9 @@
             {% endif %}
 
             {% if r.thankyou_sent and not r.round2_sent %}
-            <a href="{{ url_for('results.round2', rfq_id=r.id) }}" class="btn btn-warning btn-sm">🎯 Step 2: Set Target & Round 2</a>
+            <a href="{{ url_for('round2.round2', rfq_id=r.id) }}" class="btn btn-warning btn-sm">🎯 Step 2: Set Target & Round 2</a>
             {% elif r.round2_sent %}
             <span style="font-size:12px;color:#d97706;font-weight:600;background:#fffbeb;border:1px solid #fde68a;padding:3px 10px;border-radius:6px">✅ Round 2 Sent</span>
-            <a href="{{ url_for('results.round2', rfq_id=r.id) }}" class="btn btn-ghost btn-sm" style="font-size:11px">Resend</a>
             {% endif %}
 
             {% if item.ranked_all %}

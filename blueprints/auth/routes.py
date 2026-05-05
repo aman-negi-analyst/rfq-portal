@@ -1,6 +1,5 @@
-import os, json, re as _re, secrets, smtplib, threading, traceback, logging
+import os, re as _re, secrets, threading, logging
 from datetime import datetime, date, timedelta
-from io import BytesIO
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, session, flash, jsonify, send_file,
@@ -12,7 +11,7 @@ from models import (User, Vendor, RFQ, Lane, VendorQuote, Round2Token,
                     EmailLog, QuoteToken, now_ist, to_ist)
 from utils.helpers import (login_required, admin_required, hash_pw, check_pw,
                             is_rate_limited, record_attempt, clear_attempts,
-                            _login_attempts, LOGIN_MAX_ATTEMPTS,
+                            LOGIN_MAX_ATTEMPTS,
                             add_notification, notify_managers,
                             add_notification_plain, add_audit, next_rfq_id,
                             allowed_file, unread_count, get_globals)
@@ -22,7 +21,7 @@ logger = logging.getLogger(__name__)
 bp = Blueprint('auth', __name__)
 
 
-@bp.route('/')
+@bp.route('/', methods=['GET', 'POST'])
 def index():
     if 'user' in session:
         return redirect(url_for('auth.dashboard'))
@@ -64,7 +63,13 @@ def login():
             return redirect(url_for('auth.dashboard'))
 
         record_attempt(ip)
-        remaining = LOGIN_MAX_ATTEMPTS - len(_login_attempts.get(ip, []))
+        from models import LoginAttempt
+        from datetime import datetime, timedelta
+        recent = LoginAttempt.query.filter(
+            LoginAttempt.ip_address == ip,
+            LoginAttempt.attempted_at >= datetime.utcnow() - timedelta(seconds=300)
+        ).count()
+        remaining = max(0, LOGIN_MAX_ATTEMPTS - recent)
         error = f'Invalid email or password. {remaining} attempt(s) remaining.'
 
     return render_template('login.html', error=error)
@@ -75,29 +80,6 @@ def logout():
     session.clear()
     return redirect(url_for('auth.login'))
 
-
-@bp.route('/forgot-password', methods=['GET', 'POST'])
-@csrf.exempt
-def forgot_password():
-    if 'user' in session:
-        return redirect(url_for('auth.dashboard'))
-    error = success = None
-    if request.method == 'POST':
-        email   = request.form.get('email', '').strip().lower()
-        new_pw  = request.form.get('new_password', '').strip()
-        confirm = request.form.get('confirm_password', '').strip()
-        user    = User.query.filter_by(email=email).first()
-        if not user:
-            error = 'No account found with that email.'
-        elif new_pw != confirm:
-            error = 'Passwords do not match.'
-        elif len(new_pw) < 8:
-            error = 'Password must be at least 8 characters.'
-        else:
-            user.password = hash_pw(new_pw)
-            db.session.commit()
-            success = 'Password reset successfully. You can now log in.'
-    return render_template('forgot_password.html', error=error, success=success)
 
 
 @bp.route('/register', methods=['GET', 'POST'])
@@ -167,17 +149,23 @@ def dashboard():
     status_data = [draft, pending, approved, sent, closed, rejected]
     status_labels = ['Draft', 'Pending', 'Approved', 'Sent/Active', 'Closed', 'Rejected']
 
-# ── Monthly RFQ trend (last 6 months) ──
-    monthly_raw = db.session.query(
-        func.to_char(RFQ.created_at, 'Mon').label('month'),
-        func.to_char(RFQ.created_at, 'YYYY-MM').label('ym'),
-        func.count(RFQ.id).label('count')
-    ).group_by(
-        func.to_char(RFQ.created_at, 'Mon'),
-        func.to_char(RFQ.created_at, 'YYYY-MM')
-    ).order_by(func.to_char(RFQ.created_at, 'YYYY-MM')).limit(6).all()
-    monthly_labels = [r.month for r in monthly_raw]
-    monthly_values = [r.count for r in monthly_raw]
+# ── Monthly RFQ trend (last 6 months) — DB-agnostic ──
+    from collections import OrderedDict
+    from datetime import timedelta
+    _six_months_ago = now_ist() - timedelta(days=180)
+    _recent_rfqs = RFQ.query.filter(RFQ.created_at >= _six_months_ago).all()
+    _monthly = OrderedDict()
+    for r in _recent_rfqs:
+        if r.created_at:
+            key = r.created_at.strftime('%Y-%m')
+            label = r.created_at.strftime('%b')
+            if key not in _monthly:
+                _monthly[key] = {'label': label, 'count': 0}
+            _monthly[key]['count'] += 1
+    # Sort and take last 6
+    _sorted = sorted(_monthly.items())[-6:]
+    monthly_labels = [v['label'] for _, v in _sorted]
+    monthly_values = [v['count'] for _, v in _sorted]
 
     # ── Top vendors by quote count ──
     top_vendors_raw = db.session.query(

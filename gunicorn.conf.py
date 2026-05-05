@@ -25,7 +25,7 @@ access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s %(D)s'
 # ── Security ─────────────────────────────────────────────
 limit_request_line   = 4094
 limit_request_fields = 100
-forwarded_allow_ips  = os.environ.get("PROXY_IPS", "127.0.0.1")
+forwarded_allow_ips  = "*"  # Railway terminates TLS at proxy — trust all forwarded IPs
 
 # ── Process naming ───────────────────────────────────────
 proc_name = "rfq_portal"

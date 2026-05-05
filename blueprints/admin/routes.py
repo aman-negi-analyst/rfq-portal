@@ -1,6 +1,4 @@
-import os, json, re as _re, secrets, smtplib, threading, traceback, logging
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import os, json, re as _re, secrets, threading, traceback, logging
 from datetime import datetime, date, timedelta
 from io import BytesIO
 
@@ -13,16 +11,66 @@ from models import (User, Vendor, RFQ, Lane, VendorQuote, Round2Token,
                     EmailLog, QuoteToken, now_ist, to_ist)
 from utils.helpers import (login_required, admin_required, hash_pw, check_pw,
                             is_rate_limited, record_attempt, clear_attempts,
-                            _login_attempts, LOGIN_MAX_ATTEMPTS,
                             add_notification, notify_managers,
                             add_notification_plain, add_audit, next_rfq_id,
                             allowed_file, unread_count, get_globals,
-                            encrypt_password, decrypt_password)
+                            encrypt_password)
 from utils.email import send_simple_email
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('admin', __name__)
+
+@bp.route('/rfqs/<int:rfq_id>/resend-invite/<int:token_id>', methods=['POST'])
+@login_required
+def resend_invite(rfq_id, token_id):
+    """Resend Round 1 invite email to a specific vendor from the RFQ detail page."""
+    rfq      = RFQ.query.get_or_404(rfq_id)
+    qt       = QuoteToken.query.get_or_404(token_id)
+    settings = EmailSettings.query.filter_by(is_active=1).first()
+
+    if not settings or not settings.gmail_address:
+        flash('Email not configured. Go to Settings first.', 'error')
+        return redirect(url_for('rfq.rfq_detail', rfq_id=rfq_id))
+
+    try:
+        from utils.email import send_simple_email
+        base_url   = (settings.base_url or os.environ.get('BASE_URL', 'http://localhost:5000')).rstrip('/')
+        quote_link = f'{base_url}/submit-quote/{rfq.rfq_id}/{qt.token}'
+        deadline_str = rfq.deadline.strftime('%d %B %Y') if rfq.deadline else 'Not specified'
+
+        html = (
+            '<html><body style="font-family:Arial,sans-serif;color:#1a1d23;max-width:650px;margin:0 auto;padding:20px">'
+            '<div style="background:linear-gradient(135deg,#4f46e5,#6366f1);padding:20px 28px;border-radius:8px 8px 0 0">'
+            '<h2 style="color:#fff;margin:0;font-size:18px">RFQ Open for Bidding</h2>'
+            '<p style="color:#c7d2fe;margin:4px 0 0;font-size:13px">Shadowfax RFQ Portal</p>'
+            '</div>'
+            '<div style="border:1px solid #e2e5ed;border-top:none;border-radius:0 0 8px 8px;padding:24px 28px">'
+            f'<p style="font-size:15px">Dear <strong>{qt.vendor_name}</strong>,</p>'
+            '<p style="color:#374151;font-size:14px;margin-bottom:4px">Please share the <strong>best rate as soon as possible</strong>.</p>'
+            '<div style="background:#f5f6fa;border-left:4px solid #4f46e5;border-radius:4px;padding:14px 18px;margin:16px 0">'
+            '<table style="width:100%;font-size:14px;border-collapse:collapse">'
+            f'<tr><td style="color:#6b7280;padding:4px 0;width:110px">RFQ ID</td><td style="font-weight:600;color:#4f46e5">{rfq.rfq_id}</td></tr>'
+            f'<tr><td style="color:#6b7280;padding:4px 0">Subject</td><td style="font-weight:600">{rfq.subject}</td></tr>'
+            f'<tr><td style="color:#6b7280;padding:4px 0">Zone</td><td>{rfq.zone or "N/A"}</td></tr>'
+            f'<tr><td style="color:#6b7280;padding:4px 0">Deadline</td><td style="color:#dc2626;font-weight:600">{deadline_str}</td></tr>'
+            '</table></div>'
+            '<div style="text-align:center;margin:24px 0">'
+            f'<a href="{quote_link}" style="display:inline-block;background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700">📝 Submit Your Quote Now</a>'
+            '<p style="margin:10px 0 0;font-size:12px;color:#6b7280">This is your personal link — do not share it</p>'
+            '</div>'
+            f'<p style="font-size:11px;color:#9ca3af;word-break:break-all">{quote_link}</p>'
+            f'<p style="font-size:13px;color:#6b7280;margin-top:24px;border-top:1px solid #e2e5ed;padding-top:16px">Regards,<br><strong>{settings.sender_name}</strong></p>'
+            '</div></body></html>'
+        )
+        send_simple_email(settings, qt.vendor_email,
+            f'[Reminder] RFQ Open for Bidding — {rfq.rfq_id}: {rfq.subject}', html)
+        flash(f'✅ Invite resent to {qt.vendor_name} ({qt.vendor_email})', 'success')
+    except Exception as e:
+        flash(f'❌ Failed to resend: {str(e)}', 'error')
+
+    return redirect(url_for('rfq.rfq_detail', rfq_id=rfq_id))
+
 
 @bp.route('/notifications')
 @login_required

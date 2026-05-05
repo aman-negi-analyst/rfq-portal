@@ -39,7 +39,7 @@
   </div>
 
   <!-- Form -->
-  <form method="POST" action="{{ url_for('results.round2', rfq_id=rfq.id) }}" id="round2-form">
+  <form method="POST" action="{{ url_for('round2.round2', rfq_id=rfq.id) }}" id="round2-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <!-- Target Rate Table -->

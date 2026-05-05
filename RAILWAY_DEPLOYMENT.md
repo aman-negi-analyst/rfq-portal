@@ -83,6 +83,7 @@ This guide will help you deploy your RFQ Portal to Railway with a PostgreSQL dat
    PORT=5000
    BASE_URL=https://your-app-name.up.railway.app
    ADMIN_EMAIL=your-email@company.com
+   RESEND_API_KEY=<your-resend-api-key>
    ```
 
 4. **Generate SECRET_KEY:**

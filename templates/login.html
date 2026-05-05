@@ -215,7 +215,7 @@ body {
     <div class="error-box">⚠️ {{ error }}</div>
     {% endif %}
 
-    <form method="POST">
+    <form method="POST" action="{{ url_for('auth.login') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-group">
         <label>Email Address</label>
@@ -228,9 +228,7 @@ body {
       <button type="submit" class="btn-auth">Sign In →</button>
     </form>
 
-    <div class="auth-footer" style="margin-top:10px">
-      Forgot your password? <a href="{{ url_for('auth.forgot_password') }}">Reset it</a>
-    </div>
+
 
 
   </div>

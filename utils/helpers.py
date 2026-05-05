@@ -1,24 +1,21 @@
 import hashlib
 import logging
-import time
 import base64
 import os
-from collections import defaultdict
-from datetime import date
+from datetime import date, datetime, timedelta
 from functools import wraps
 
 import bcrypt
 from flask import redirect, session, url_for, flash, request
 
 from extensions import db
-from models import AuditLog, Notification, RFQ, User
+from models import AuditLog, Notification, RFQ, User, LoginAttempt
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_EXTENSIONS    = {'pdf', 'xlsx', 'xls', 'csv', 'doc', 'docx'}
-LOGIN_MAX_ATTEMPTS    = 5
-LOGIN_WINDOW_SECS     = 300
-_login_attempts: dict = defaultdict(list)
+ALLOWED_EXTENSIONS = {'pdf', 'xlsx', 'xls', 'csv', 'doc', 'docx'}
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SECS  = 300
 
 
 # ── File helpers ──────────────────────────────────────────────────────────────
@@ -74,26 +71,43 @@ def decrypt_password(stored):
     return stored
 
 
-# ── Rate limiting ─────────────────────────────────────────────────────────────
+# ── Rate limiting (DB-backed — works across multiple gunicorn workers) ────────
+
+def _window_start() -> datetime:
+    return datetime.utcnow() - timedelta(seconds=LOGIN_WINDOW_SECS)
+
 
 def is_rate_limited(ip: str) -> bool:
-    """Check if IP has exceeded max login attempts within the time window."""
-    now = time.time()
-    attempts = _login_attempts.get(ip, [])
-    # Remove attempts outside the time window
-    _login_attempts[ip] = [t for t in attempts if now - t < LOGIN_WINDOW_SECS]
-    return len(_login_attempts[ip]) >= LOGIN_MAX_ATTEMPTS
+    """Return True if the IP has hit the max failed attempts within the window."""
+    try:
+        count = LoginAttempt.query.filter(
+            LoginAttempt.ip_address == ip,
+            LoginAttempt.attempted_at >= _window_start()
+        ).count()
+        return count >= LOGIN_MAX_ATTEMPTS
+    except Exception as e:
+        logger.warning(f'Rate-limit check failed (failing open): {e}')
+        return False
 
 
 def record_attempt(ip: str) -> None:
-    """Record a failed login attempt for the given IP."""
-    _login_attempts[ip].append(time.time())
+    """Persist a failed login attempt for this IP."""
+    try:
+        db.session.add(LoginAttempt(ip_address=ip))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.warning(f'Could not record login attempt: {e}')
 
 
 def clear_attempts(ip: str) -> None:
-    """Clear all login attempts for the given IP (on successful login)."""
-    if ip in _login_attempts:
-        del _login_attempts[ip]
+    """Remove all recorded attempts for this IP (called on successful login)."""
+    try:
+        LoginAttempt.query.filter_by(ip_address=ip).delete()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.warning(f'Could not clear login attempts: {e}')
 
 
 # ── Auth decorators ───────────────────────────────────────────────────────────

@@ -20,17 +20,20 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY')
 
     # ── Database ──────────────────────────────────────────
-    SQLALCHEMY_DATABASE_URI = os.environ.get(
+    _DATABASE_URL = os.environ.get(
         'DATABASE_URL',
         'sqlite:///' + os.path.join(BASE_DIR, 'rfq_portal.db')
     )
+    if _DATABASE_URL.startswith('postgres://'):
+        _DATABASE_URL = _DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    SQLALCHEMY_DATABASE_URI = _DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # ── Session ───────────────────────────────────────────
     PERMANENT_SESSION_LIFETIME = 86400
     SESSION_COOKIE_HTTPONLY    = True
     SESSION_COOKIE_SAMESITE    = 'Lax'
-    SESSION_COOKIE_SECURE      = False
+    SESSION_COOKIE_SECURE      = os.environ.get('FLASK_ENV') == 'production'
     SESSION_COOKIE_NAME        = 'rfq_session'
 
     # ── Uploads ───────────────────────────────────────────
@@ -40,7 +43,7 @@ class Config:
 
     # ── CSRF ──────────────────────────────────────────────
     WTF_CSRF_TIME_LIMIT    = 3600
-    WTF_CSRF_SSL_STRICT    = False
+    WTF_CSRF_SSL_STRICT    = os.environ.get('FLASK_ENV') == 'production'
     WTF_CSRF_METHODS       = {'POST', 'PUT', 'PATCH', 'DELETE'}
     WTF_CSRF_CHECK_DEFAULT = True
 

@@ -1,6 +1,4 @@
-import os, json, re as _re, secrets, smtplib, threading, traceback, logging
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import os, json, re as _re, secrets, threading, traceback, logging
 from datetime import datetime, date, timedelta
 from io import BytesIO
 
@@ -13,11 +11,9 @@ from models import (User, Vendor, RFQ, Lane, VendorQuote, Round2Token,
                     EmailLog, QuoteToken, now_ist, to_ist)
 from utils.helpers import (login_required, admin_required, hash_pw, check_pw,
                             is_rate_limited, record_attempt, clear_attempts,
-                            _login_attempts, LOGIN_MAX_ATTEMPTS,
                             add_notification, notify_managers,
                             add_notification_plain, add_audit, next_rfq_id,
-                            allowed_file, unread_count, get_globals,
-                            decrypt_password)
+                            allowed_file, unread_count, get_globals)
 from utils.email import send_simple_email
 
 logger = logging.getLogger(__name__)
@@ -38,11 +34,15 @@ def rfq_list():
     if status:   q = q.filter(RFQ.status == status)
     if vertical: q = q.filter(RFQ.vertical == vertical)
 
-    rfqs  = q.order_by(RFQ.created_at.desc()).all()
-    today = date.today()
+    today    = date.today()
+    page     = request.args.get('page', 1, type=int)
+    per_page = 50
+    pagination = q.order_by(RFQ.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    rfqs       = pagination.items
 
     return render_template('rfq_list.html', rfqs=rfqs,
         search=search, zone=zone, status=status, vertical=vertical, today=today,
+        pagination=pagination, page=page, per_page=per_page,
         total_count    = RFQ.query.count(),
         draft_count    = RFQ.query.filter_by(status='Draft').count(),
         pending_count  = RFQ.query.filter_by(status='Pending').count(),
