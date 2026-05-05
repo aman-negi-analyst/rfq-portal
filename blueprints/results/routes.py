@@ -166,13 +166,42 @@ def close_rfq_result(rfq_id):
                 vendor_lane_map[vname] = []
             vendor_lane_map[vname].append(lw)
 
-        # Get emails from quote tokens
+        # Get emails from quote tokens, with fallback to Vendor master list
         winning_vendors = set()
         for vname, vlanes in vendor_lane_map.items():
+            vemail = None
+            # 1. Try QuoteToken exact match
             qt = QuoteToken.query.filter_by(rfq_id=rfq_id, vendor_name=vname).first()
-            if not qt:
-                qt = Round2Token.query.filter_by(rfq_id=rfq_id, vendor_name=vname).first()
-            vemail = qt.vendor_email if qt else None
+            if qt and qt.vendor_email:
+                vemail = qt.vendor_email
+            # 2. Try QuoteToken case-insensitive
+            if not vemail:
+                qt = QuoteToken.query.filter(
+                    QuoteToken.rfq_id == rfq_id,
+                    db.func.lower(QuoteToken.vendor_name) == vname.lower()
+                ).first()
+                if qt and qt.vendor_email:
+                    vemail = qt.vendor_email
+            # 3. Try Round2Token exact match
+            if not vemail:
+                r2t = Round2Token.query.filter_by(rfq_id=rfq_id, vendor_name=vname).first()
+                if r2t and r2t.vendor_email:
+                    vemail = r2t.vendor_email
+            # 4. Try Round2Token case-insensitive
+            if not vemail:
+                r2t = Round2Token.query.filter(
+                    Round2Token.rfq_id == rfq_id,
+                    db.func.lower(Round2Token.vendor_name) == vname.lower()
+                ).first()
+                if r2t and r2t.vendor_email:
+                    vemail = r2t.vendor_email
+            # 5. Fall back to Vendor master list
+            if not vemail:
+                v = Vendor.query.filter(
+                    db.func.lower(Vendor.name) == vname.lower()
+                ).first()
+                if v and v.email:
+                    vemail = v.email
             if vemail:
                 vendor_total = sum(lw['cost'] for lw in vlanes)
                 send_lane_winner_email(rfq.id, vname, vemail,
@@ -184,9 +213,18 @@ def close_rfq_result(rfq_id):
             # Get all vendors who participated in Round 2
             round2_vendors = {}
             for r2t in Round2Token.query.filter_by(rfq_id=rfq_id).all():
-                if r2t.vendor_name and r2t.vendor_email and r2t.is_used:
-                    round2_vendors[r2t.vendor_name] = r2t.vendor_email
-            
+                if r2t.vendor_name and r2t.is_used:
+                    vemail = r2t.vendor_email
+                    # Fall back to Vendor master list if no email on token
+                    if not vemail:
+                        v = Vendor.query.filter(
+                            db.func.lower(Vendor.name) == r2t.vendor_name.lower()
+                        ).first()
+                        if v and v.email:
+                            vemail = v.email
+                    if vemail:
+                        round2_vendors[r2t.vendor_name] = vemail
+
             # Send regret email to those who didn't win
             for vname, vemail in round2_vendors.items():
                 if vname not in winning_vendors:

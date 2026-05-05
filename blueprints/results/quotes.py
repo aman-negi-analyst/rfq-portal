@@ -128,13 +128,30 @@ def send_thankyou_email(rfq_id):
     rfq.thankyou_sent = True
     db.session.commit()
 
-    quotes = VendorQuote.query.filter_by(rfq_id=rfq_id).all()
+    quotes = VendorQuote.query.filter_by(rfq_id=rfq_id, is_round2=False).all()
     vendor_map = {}
     for q in quotes:
-        if q.vendor_name not in vendor_map:
-            qt = QuoteToken.query.filter_by(rfq_id=rfq_id, vendor_name=q.vendor_name).first()
-            if qt:
-                vendor_map[q.vendor_name] = qt.vendor_email
+        if not q.vendor_name or q.vendor_name in vendor_map:
+            continue
+        # 1. Try QuoteToken (exact match)
+        qt = QuoteToken.query.filter_by(rfq_id=rfq_id, vendor_name=q.vendor_name).first()
+        if qt and qt.vendor_email:
+            vendor_map[q.vendor_name] = qt.vendor_email
+            continue
+        # 2. Try QuoteToken case-insensitive match (handles name casing differences)
+        qt = QuoteToken.query.filter(
+            QuoteToken.rfq_id == rfq_id,
+            db.func.lower(QuoteToken.vendor_name) == q.vendor_name.lower()
+        ).first()
+        if qt and qt.vendor_email:
+            vendor_map[q.vendor_name] = qt.vendor_email
+            continue
+        # 3. Fall back to Vendor master list by name
+        v = Vendor.query.filter(
+            db.func.lower(Vendor.name) == q.vendor_name.lower()
+        ).first()
+        if v and v.email:
+            vendor_map[q.vendor_name] = v.email
     if not vendor_map:
         flash('No vendors have quoted yet.', 'error')
         return redirect(url_for('results.results'))
