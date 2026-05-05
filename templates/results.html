@@ -182,13 +182,18 @@
   {% if item.ranked_all %}
 
   <!-- Table Header -->
-  <div style="display:grid;grid-template-columns:48px 1fr 130px 130px 120px 110px;gap:12px;padding:8px 20px;background:#f9fafb;border-bottom:1px solid #e5e7eb">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af">Rank</div>
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af">Vendor</div>
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;text-align:right">Total Quote</div>
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;text-align:right">vs Guideline</div>
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;text-align:center">Lanes Quoted</div>
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;text-align:center">Status</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px;background:#f9fafb;border-bottom:1px solid #e5e7eb">
+    <div style="display:grid;grid-template-columns:48px 1fr 130px 130px 120px 110px;gap:12px;flex:1">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af">Rank</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af">Vendor</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;text-align:right">Total Quote</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;text-align:right">vs Guideline</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;text-align:center">Lanes Quoted</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;text-align:center">Status</div>
+    </div>
+  </div>
+  <div style="padding:8px 20px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:11px;color:#92400e">
+    💡 <strong>Ranks are by total quote price.</strong> Each lane can be awarded to a different vendor — see the award summary below after closing.
   </div>
 
   {% for vendor_name, total_cost in item.ranked_all %}
@@ -261,10 +266,34 @@
 
     <!-- Winner status -->
     <div style="text-align:center">
-      {% if r.status == 'Closed' and r.winner_vendor == vendor_name %}
-      <span style="background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;border-radius:99px;padding:4px 10px;font-size:11px;font-weight:700">🏆 Winner</span>
+      {% if r.status == 'Closed' %}
+        {% set lanes_won = [] %}
+        {% for lw in r.lanes %}
+          {% set winner_record = namespace(found=false) %}
+          {% for q in r.quotes %}
+            {% if q.lane_id == lw.id %}{% endif %}
+          {% endfor %}
+        {% endfor %}
+        {# Count lane wins for this vendor from lane_rankings #}
+        {% set won_count = namespace(n=0) %}
+        {% for lane_id, lrank in item.lane_rankings.items() %}
+          {% if lrank.quotes and lrank.quotes[0].vendor == vendor_name %}
+            {% set won_count.n = won_count.n + 1 %}
+          {% endif %}
+        {% endfor %}
+        {% if r.winner_vendor == vendor_name %}
+          <span style="background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;border-radius:99px;padding:4px 10px;font-size:11px;font-weight:700">🏆 Winner</span>
+          {% if won_count.n > 0 %}
+          <div style="font-size:10px;color:#059669;margin-top:3px">{{ won_count.n }} lane{{ 's' if won_count.n > 1 else '' }} awarded</div>
+          {% endif %}
+        {% elif won_count.n > 0 %}
+          <span style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:99px;padding:4px 10px;font-size:11px;font-weight:600">Partial Win</span>
+          <div style="font-size:10px;color:#92400e;margin-top:3px">{{ won_count.n }} lane{{ 's' if won_count.n > 1 else '' }} awarded</div>
+        {% else %}
+          <span style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:99px;padding:4px 10px;font-size:11px">Not Selected</span>
+        {% endif %}
       {% else %}
-      <span style="color:#9ca3af;font-size:12px">—</span>
+      <span style="color:#9ca3af;font-size:12px">Pending</span>
       {% endif %}
     </div>
 
@@ -281,10 +310,27 @@
 
   <!-- Closed RFQ summary bar -->
   {% if r.status == 'Closed' %}
-  <div style="padding:14px 20px;background:#f0fdf4;border-top:1px solid #a7f3d0;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-    <div style="font-size:13px;color:#059669;font-weight:600">✅ Awarded to {{ r.winner_vendor }}</div>
-    {% if r.final_cost %}<div style="font-size:13px;color:#374151">Final Cost: <strong>₹{{ '{:,.0f}'.format(r.final_cost) }}</strong></div>{% endif %}
-    {% if r.rca_reason %}<div style="font-size:12px;color:#d97706">RCA: {{ r.rca_reason }}</div>{% endif %}
+  <div style="padding:16px 20px;background:#f0fdf4;border-top:1px solid #a7f3d0">
+    <div style="font-size:13px;color:#059669;font-weight:700;margin-bottom:10px">✅ RFQ Closed — Lane Awards</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      {% for lane_id, lrank in item.lane_rankings.items() %}
+        {% if lrank.quotes %}
+        <div style="background:#fff;border:1px solid #a7f3d0;border-radius:8px;padding:8px 12px;font-size:12px">
+          <div style="color:#6b7280;font-size:10px;font-weight:600;text-transform:uppercase;margin-bottom:2px">{{ lrank.lane_name }}</div>
+          <div style="color:#059669;font-weight:700">🏆 {{ lrank.quotes[0].vendor }}</div>
+          <div style="color:#374151">₹{{ '{:,.0f}'.format(lrank.quotes[0].cost) }}</div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;border-top:1px solid #a7f3d0;padding-top:10px">
+      <div style="font-size:12px;color:#374151">Overall Winner (most lanes): <strong style="color:#059669">{{ r.winner_vendor }}</strong></div>
+      {% if r.final_cost %}<div style="font-size:12px;color:#374151">Total Final Cost: <strong>₹{{ '{:,.0f}'.format(r.final_cost) }}</strong></div>{% endif %}
+      {% if r.rca_reason %}<div style="font-size:12px;color:#d97706">RCA: {{ r.rca_reason }}</div>{% endif %}
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:#6b7280;font-style:italic">
+      💡 Each lane can be awarded to a different vendor. "Overall Winner" is the vendor who won the most lanes.
+    </div>
   </div>
   {% endif %}
 
