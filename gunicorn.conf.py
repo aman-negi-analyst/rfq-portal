@@ -5,8 +5,10 @@ import multiprocessing
 bind = f"0.0.0.0:{os.environ.get('PORT', '8000')}"
 
 # ── Workers ──────────────────────────────────────────────
-# Rule of thumb: (2 × CPU cores) + 1
-workers = multiprocessing.cpu_count() * 2 + 1
+# Railway containers report many CPU cores but have limited RAM.
+# Cap at 4 workers max to prevent memory exhaustion.
+# Override via WEB_CONCURRENCY env var in Railway if needed.
+workers = int(os.environ.get("WEB_CONCURRENCY", min(multiprocessing.cpu_count() * 2 + 1, 4)))
 worker_class = "sync"
 threads = 2
 worker_connections = 1000
