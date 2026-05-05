@@ -104,7 +104,19 @@ def results():
             'is_past_deadline':  is_past_deadline,
             'quote_count':       len(vendor_totals),
             'show_round2_only':  show_round2_only,
+            'lane_winners':      {lw.lane_id: lw for lw in LaneWinner.query.filter_by(rfq_id=r.id).all()},
+            'vendor_wins':       {},  # filled below
         })
+        # Build vendor_wins: {vendor_name: [lane_names awarded]}
+        vendor_wins = {}
+        for lw in rfq_data[-1]['lane_winners'].values():
+            lane_obj = lane_map.get(lw.lane_id)
+            lane_name = lane_obj.lane_name if lane_obj else f'Lane {lw.lane_id}'
+            if lw.vendor_name not in vendor_wins:
+                vendor_wins[lw.vendor_name] = []
+            vendor_wins[lw.vendor_name].append({'lane': lane_name, 'cost': lw.final_cost or 0})
+        rfq_data[-1]['vendor_wins'] = vendor_wins
+
     return render_template('results.html', rfq_data=rfq_data)
 
 
