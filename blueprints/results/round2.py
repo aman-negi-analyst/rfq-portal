@@ -13,11 +13,48 @@ from utils.helpers import (login_required,
                             add_notification, notify_managers,
                             add_notification_plain, add_audit, unread_count, get_globals)
 from utils.email import send_simple_email
-from blueprints.results.quotes import _send_r2_thankyou_to_vendor
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('round2', __name__)
+
+
+def _send_r2_thankyou_to_vendor(rfq, vendor_name, vendor_email):
+    """Send thank you email to vendor after Round 2 quote submission."""
+    if not vendor_email:
+        return
+    _captured_app = current_app._get_current_object()
+    def _send():
+        with _captured_app.app_context():
+            try:
+                settings = EmailSettings.query.filter_by(is_active=1).first()
+                if not settings or not settings.gmail_address:
+                    return
+                rfq_obj = db.session.get(RFQ, rfq.id)
+                html = f"""<html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+  <div style="background:linear-gradient(135deg,#0a8a6e,#0ea882);padding:24px;border-radius:8px 8px 0 0">
+    <h2 style="color:#fff;margin:0">Thank You for Your Revised Quote!</h2>
+    <p style="color:#d1fae5;margin:6px 0 0;font-size:13px">Round 2 — RFQ: {rfq_obj.rfq_id} — {rfq_obj.subject}</p>
+  </div>
+  <div style="border:1px solid #e2e5ed;border-top:none;border-radius:0 0 8px 8px;padding:28px">
+    <p>Dear <strong>{vendor_name}</strong>,</p>
+    <p style="color:#374151;line-height:1.7">Thank you for submitting your revised quote for <strong>Round 2</strong> of <strong>{rfq_obj.rfq_id}: {rfq_obj.subject}</strong>. We appreciate your continued participation.</p>
+    <p style="color:#374151;line-height:1.7">We are currently reviewing all Round 2 quotes. Our procurement team will be in touch with you shortly with the final decision.</p>
+    <div style="background:#f0fdf9;border:1px solid #a7f3d0;border-radius:8px;padding:16px;margin:20px 0">
+      <strong>RFQ ID:</strong> {rfq_obj.rfq_id}<br>
+      <strong>Subject:</strong> {rfq_obj.subject}<br>
+      <strong>Zone:</strong> {rfq_obj.zone or 'N/A'}<br>
+      <strong>Round:</strong> 2 (Revised Quote)
+    </div>
+    <p style="color:#6b7280;border-top:1px solid #e2e5ed;padding-top:16px;margin-top:24px">Regards,<br><strong>{settings.sender_name}</strong></p>
+  </div>
+</body></html>"""
+                send_simple_email(settings, vendor_email,
+                    f'Thank You for Your Round 2 Quote — {rfq_obj.rfq_id}', html)
+                logger.info(f'Round 2 thank you email sent to {vendor_name} ({vendor_email})')
+            except Exception as e:
+                logger.error(f'Round 2 thank you email error for {vendor_name}: {e}')
+    threading.Thread(target=_send, daemon=True).start()
 
 @bp.route('/results/<int:rfq_id>/round2', methods=['GET', 'POST'])
 @login_required
