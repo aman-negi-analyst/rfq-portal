@@ -264,106 +264,13 @@ def full_backup():
 
     zip_buffer.seek(0)
     filename = f'shadowfax_rfq_backup_{now_ist().strftime("%d%m%Y_%H%M")}.zip'
-
-    # ── Sheet 1: RFQs ────────────────────────────────────────
-    writer.writerow(['=== RFQs ==='])
-    writer.writerow(['RFQ ID','Subject','Zone','Vertical','Deadline','Status',
-                     'Created By','Approved By','Winner Vendor','Final Cost',
-                     'Guideline Cost','Savings','Created At'])
-    for r in RFQ.query.order_by(RFQ.created_at).all():
-        gc = sum(l.guideline_cost or 0 for l in r.lanes)
-        fc = r.final_cost or 0
-        writer.writerow([
-            r.rfq_id, r.subject, r.zone or '', r.vertical or '',
-            r.deadline.strftime('%d/%m/%Y') if r.deadline else '',
-            r.status, r.created_by or '', r.approved_by or '',
-            r.winner_vendor or '', fc or '', round(gc,2),
-            round(gc - fc, 2) if fc else '',
-            r.created_at.strftime('%d/%m/%Y %H:%M') if r.created_at else ''
-        ])
-    writer.writerow([])
-
-    # ── Sheet 2: Lanes ────────────────────────────────────────
-    writer.writerow(['=== LANES ==='])
-    writer.writerow(['RFQ ID','Lane Code','Lane Name','Cities','Vehicle Type',
-                     'Lane Type','KMs','Frequency','Fleet Count','Drivers',
-                     'Guideline Cost','Guideline CPK','Target Rate'])
-    for l in Lane.query.all():
-        rfq_obj = db.session.get(RFQ, l.rfq_id)
-        writer.writerow([
-            rfq_obj.rfq_id if rfq_obj else '',
-            l.lane_code or '', l.lane_name or '', l.cities or '',
-            l.vehicle_type or '', l.lane_type or '',
-            l.kms or '', l.frequency or '', l.fleet_count or '',
-            l.no_of_drivers or '', l.guideline_cost or '',
-            l.guideline_cpk or '', l.target_rate or ''
-        ])
-    writer.writerow([])
-
-    # ── Sheet 3: Vendor Quotes ────────────────────────────────
-    writer.writerow(['=== VENDOR QUOTES ==='])
-    writer.writerow(['RFQ ID','Lane Name','Vendor Name','Round',
-                     'Quoted Cost','CPK','Submitted At'])
-    for q in VendorQuote.query.all():
-        rfq_obj  = db.session.get(RFQ, q.rfq_id)
-        lane_obj = db.session.get(Lane, q.lane_id)
-        writer.writerow([
-            rfq_obj.rfq_id if rfq_obj else '',
-            lane_obj.lane_name if lane_obj else '',
-            q.vendor_name or '',
-            'Round 2' if q.is_round2 else 'Round 1',
-            q.quoted_cost or '', q.quoted_cpk or '',
-            to_ist(q.submitted_at).strftime('%d/%m/%Y %H:%M') if q.submitted_at else ''
-        ])
-    writer.writerow([])
-
-    # ── Sheet 4: Lane Winners ─────────────────────────────────
-    writer.writerow(['=== LANE WINNERS ==='])
-    writer.writerow(['RFQ ID','Lane Name','Winner Vendor',
-                     'Final Cost','RCA Reason','Awarded By','Awarded At'])
-    for lw in LaneWinner.query.all():
-        rfq_obj  = db.session.get(RFQ, lw.rfq_id)
-        lane_obj = db.session.get(Lane, lw.lane_id)
-        writer.writerow([
-            rfq_obj.rfq_id if rfq_obj else '',
-            lane_obj.lane_name if lane_obj else '',
-            lw.vendor_name or '', lw.final_cost or '',
-            lw.rca_reason or '', lw.awarded_by or '',
-            lw.created_at.strftime('%d/%m/%Y %H:%M') if lw.created_at else ''
-        ])
-    writer.writerow([])
-
-    # ── Sheet 5: Vendors ──────────────────────────────────────
-    writer.writerow(['=== VENDORS ==='])
-    writer.writerow(['Vendor Code','Name','POC','Contact','Email',
-                     'Region','State','City','Fleet Type','Status'])
-    for v in Vendor.query.order_by(Vendor.name).all():
-        writer.writerow([
-            v.vendor_code or '', v.name or '', v.poc or '',
-            v.contact_number or '', v.email or '', v.region or '',
-            v.state or '', v.city or '', v.fleet_type or '', v.status or ''
-        ])
-    writer.writerow([])
-
-    # ── Sheet 6: Audit Logs ───────────────────────────────────
-    writer.writerow(['=== AUDIT LOGS ==='])
-    writer.writerow(['RFQ ID','Action','Detail','User','Email','Created At'])
-    for l in AuditLog.query.order_by(AuditLog.created_at.desc()).limit(500).all():
-        writer.writerow([
-            l.rfq_id or '', l.action or '', l.detail or '',
-            l.user_name or '', l.user_email or '',
-            to_ist(l.created_at).strftime('%d/%m/%Y %H:%M') if l.created_at else ''
-        ])
-
-    output.seek(0)
-    filename = f'rfq_backup_{now_ist().strftime("%d%m%Y_%H%M")}.csv'
     from flask import Response
     return Response(
-        output.getvalue(),
-        mimetype='text/csv',
+        zip_buffer.getvalue(),
+        mimetype='application/zip',
         headers={
             'Content-Disposition': f'attachment;filename={filename}',
-            'Content-Type': 'text/csv; charset=utf-8'
+            'Content-Type': 'application/zip'
         }
     )
 
