@@ -29,6 +29,16 @@ class Config:
     SQLALCHEMY_DATABASE_URI = _DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # ── Connection pool (critical for Railway PostgreSQL) ──
+    # Railway closes idle connections after ~5 min. These settings
+    # ensure SQLAlchemy detects and replaces dead connections automatically.
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,       # test connection before using it
+        'pool_recycle': 280,         # recycle connections every 280s (before Railway's ~300s timeout)
+        'pool_size': 5,              # max persistent connections per worker
+        'max_overflow': 2,           # allow 2 extra connections under load
+        'pool_timeout': 30,          # wait up to 30s for a connection before erroring
+    }
     # ── Session ───────────────────────────────────────────
     PERMANENT_SESSION_LIFETIME = 86400
     SESSION_COOKIE_HTTPONLY    = True

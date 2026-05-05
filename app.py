@@ -113,6 +113,7 @@ def create_app(config_class=Config) -> Flask:
     def error_generic(e):
         import traceback
         from werkzeug.exceptions import HTTPException
+        db.session.rollback()  # clear any broken transaction so next request is clean
         if isinstance(e, HTTPException):
             return render_template('error.html', code=e.code), e.code
         logger.error(f'Unhandled error: {e}\n{traceback.format_exc()}')
