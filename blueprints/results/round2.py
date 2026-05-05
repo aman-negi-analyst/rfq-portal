@@ -13,6 +13,7 @@ from utils.helpers import (login_required,
                             add_notification, notify_managers,
                             add_notification_plain, add_audit, unread_count, get_globals)
 from utils.email import send_simple_email
+from blueprints.results.quotes import _send_r2_thankyou_to_vendor
 
 logger = logging.getLogger(__name__)
 
