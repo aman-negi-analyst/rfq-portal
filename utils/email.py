@@ -14,26 +14,57 @@ logger = logging.getLogger(__name__)
 # Initialise Resend API key from environment
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
 
-def send_simple_email(settings, to_email, subject, html_body):
-    """Send a single HTML email via Resend. Retries once on rate limit."""
+# Global lock — ensures only one thread sends at a time across all Gunicorn workers
+# (prevents combined rate from exceeding Resend's 2/sec limit when multiple RFQs
+#  are approved simultaneously)
+_send_lock = threading.Lock()
+
+# Gap between sends: 1.1s = ~0.91 emails/sec per thread.
+# Even if 2 threads run simultaneously (2 RFQs approved at once),
+# combined rate = ~1.82/sec — safely under Resend's 2/sec limit.
+_SEND_GAP = 1.1
+
+
+def _resend_with_retry(params, max_retries=3):
+    """
+    Send via Resend with global lock + exponential backoff on rate limit errors.
+    Lock ensures only one email is in-flight at a time across all threads.
+    Backoff: waits 2s, 4s, 8s before giving up.
+    """
     resend.api_key = os.environ.get("RESEND_API_KEY", "")
+    with _send_lock:
+        for attempt in range(1, max_retries + 1):
+            try:
+                resend.Emails.send(params)
+                time.sleep(_SEND_GAP)  # enforce gap while holding the lock
+                return  # success
+            except Exception as e:
+                err = str(e)
+                is_rate_limit = (
+                    "Too many requests" in err or
+                    "rate limit" in err.lower() or
+                    "429" in err
+                )
+                if is_rate_limit and attempt < max_retries:
+                    wait = 2 ** attempt  # 2s, 4s, 8s
+                    logger.warning(
+                        f"Resend rate limit (attempt {attempt}/{max_retries}) "
+                        f"— retrying in {wait}s"
+                    )
+                    time.sleep(wait)
+                else:
+                    raise  # non-rate-limit error, or out of retries
+
+
+def send_simple_email(settings, to_email, subject, html_body):
+    """Send a single HTML email via Resend with lock + retry."""
     params = {
         "from":    f"{settings.sender_name} <{settings.gmail_address}>",
         "to":      [to_email],
         "subject": subject,
         "html":    html_body,
     }
-    try:
-        resend.Emails.send(params)
-    except Exception as e:
-        # If rate limited, wait 1s and retry once
-        if "Too many requests" in str(e) or "rate limit" in str(e).lower():
-            logger.warning(f"Resend rate limit hit sending to {to_email} — retrying in 1s")
-            time.sleep(1)
-            resend.Emails.send(params)
-        else:
-            raise
-    time.sleep(0.6)  # 0.6s gap = max ~1.6 emails/sec, safely under Resend's 2/sec limit
+    _resend_with_retry(params)
 
 
 
@@ -312,8 +343,9 @@ def send_rfq_emails(rfq_id, rfq_subject, rfq_zone, rfq_rfq_id,
                                 "content": attachment_data,
                             }]
 
-                        resend.Emails.send(params)
+                        _resend_with_retry(params)
                         sent_emails.append(v.email)
+                        logger.info(f'Email sent to {v.name!r} ({v.email})')
 
                     except Exception as e:
                         logger.error(f'Email send failed for {v.name!r} ({v.email}): {e}')
