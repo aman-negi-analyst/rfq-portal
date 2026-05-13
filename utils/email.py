@@ -165,73 +165,95 @@ def send_rfq_emails(rfq_id, rfq_subject, rfq_zone, rfq_rfq_id,
                     with open(schedule_path, 'rb') as f:
                         attachment_data = base64.b64encode(f.read()).decode('utf-8')
 
+                # ── Build lane HTML once — outside vendor loop ──────────────
+                def make_row(label, value, bg):
+                    bg_style = "background:#f9fafb;" if bg else ""
+                    return (
+                        '<tr style="' + bg_style + 'border-top:1px solid #f3f4f6">'
+                        '<td style="padding:7px 12px;color:#6b7280;width:42%;font-weight:600;font-size:12px">' + label + '</td>'
+                        '<td style="padding:7px 12px;font-size:12px">' + str(value or "—") + '</td></tr>'
+                    )
+
+                lane_cards = ""
+                if lanes_data:
+                    for ln in lanes_data:
+                        code  = ln.get("code", "")
+                        name  = ln.get("name", "")
+                        title = (code + " — " + name) if code else name
+                        rows  = (
+                            make_row("Covered Cities",  ln.get("cities", ""),         True)  +
+                            make_row("Vehicle Size",    ln.get("vehicle", ""),        False) +
+                            make_row("Frequency",       ln.get("frequency", ""),      True)  +
+                            make_row("Trip Type",       ln.get("lane_type", ""),      False) +
+                            make_row("Distance (KMs)",  ln.get("kms", "") + " km",    True)  +
+                            make_row("Fleet Count",     ln.get("fleet_count", ""),    False) +
+                            make_row("No. of Drivers",  ln.get("no_of_drivers", ""),  True)  +
+                            make_row("Effective Date",  ln.get("effective_date", ""), False)
+                        )
+                        lane_cards += (
+                            '<div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">'
+                            '<div style="background:#4f46e5;padding:9px 14px;color:#fff;font-size:13px;font-weight:700">'
+                            + "&#128739; " + title +
+                            '</div>'
+                            '<table style="width:100%;border-collapse:collapse">'
+                            + rows +
+                            '</table></div>'
+                        )
+
+                n_lanes = len(lanes_data) if lanes_data else 0
+                plural  = "s" if n_lanes != 1 else ""
+                lanes_table_html = (
+                    '<div style="margin:20px 0">'
+                    '<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#374151;margin-bottom:12px">'
+                    + "Lane Details (" + str(n_lanes) + " Lane" + plural + ")" +
+                    '</div>' + lane_cards + '</div>'
+                ) if lanes_data else ""
+
+                schedule_note_html = (
+                    '<p style="font-size:13px;color:#059669;margin:8px 0">'
+                    '<strong>📎 Schedule sheet attached</strong> — please review before submitting your rate.</p>'
+                ) if schedule_path else ''
+
+                base_url = (settings.base_url or os.environ.get('BASE_URL', 'http://localhost:5000')).rstrip('/')
+
+                # ── Step 1: Create all tokens in one transaction ────────────
+                vendor_tokens = {}  # vendor.id -> token_str
                 for v in matched:
                     if not v.email or '@' not in v.email:
+                        logger.warning(f'Skipping vendor {v.name!r} — invalid email: {v.email!r}')
                         continue
                     try:
-                        # Generate unique quote token
                         token_str = secrets.token_urlsafe(32)
                         QuoteToken.query.filter_by(
-                            rfq_id=rfq_id, vendor_email=v.email).delete()
+                            rfq_id=rfq_id, vendor_email=v.email
+                        ).delete(synchronize_session=False)
                         qt = QuoteToken(
                             token=token_str, rfq_id=rfq_id,
                             vendor_id=v.id, vendor_name=v.name,
                             vendor_email=v.email
                         )
                         db.session.add(qt)
-                        db.session.commit()
+                        vendor_tokens[v.id] = token_str
+                        logger.info(f'Token created for vendor {v.name!r} ({v.email})')
+                    except Exception as e:
+                        logger.error(f'Token creation failed for {v.name!r}: {e}')
+                        failed.append(f'{v.email}: token error — {str(e)}')
 
-                        base_url   = (settings.base_url or os.environ.get('BASE_URL', 'http://localhost:5000')).rstrip('/')
-                        quote_link = f'{base_url}/submit-quote/{rfq_rfq_id}/{token_str}'
+                try:
+                    db.session.commit()
+                    logger.info(f'All tokens committed — {len(vendor_tokens)} vendor(s) for RFQ {rfq_rfq_id}')
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error(f'Token batch commit failed: {e}')
+                    raise
 
-                        # ── Build lane cards ────────────────────────────────
-                        def make_row(label, value, bg):
-                            bg_style = "background:#f9fafb;" if bg else ""
-                            return (
-                                '<tr style="' + bg_style + 'border-top:1px solid #f3f4f6">'
-                                '<td style="padding:7px 12px;color:#6b7280;width:42%;font-weight:600;font-size:12px">' + label + '</td>'
-                                '<td style="padding:7px 12px;font-size:12px">' + str(value or "—") + '</td></tr>'
-                            )
-
-                        lane_cards = ""
-                        if lanes_data:
-                            for ln in lanes_data:
-                                code  = ln.get("code", "")
-                                name  = ln.get("name", "")
-                                title = (code + " — " + name) if code else name
-                                rows  = (
-                                    make_row("Covered Cities",  ln.get("cities", ""),         True)  +
-                                    make_row("Vehicle Size",    ln.get("vehicle", ""),        False) +
-                                    make_row("Frequency",       ln.get("frequency", ""),      True)  +
-                                    make_row("Trip Type",       ln.get("lane_type", ""),      False) +
-                                    make_row("Distance (KMs)",  ln.get("kms", "") + " km",    True)  +
-                                    make_row("Fleet Count",     ln.get("fleet_count", ""),    False) +
-                                    make_row("No. of Drivers",  ln.get("no_of_drivers", ""),  True)  +
-                                    make_row("Effective Date",  ln.get("effective_date", ""), False)
-                                )
-                                lane_cards += (
-                                    '<div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">'
-                                    '<div style="background:#4f46e5;padding:9px 14px;color:#fff;font-size:13px;font-weight:700">'
-                                    + "&#128739; " + title +
-                                    '</div>'
-                                    '<table style="width:100%;border-collapse:collapse">'
-                                    + rows +
-                                    '</table></div>'
-                                )
-
-                        n_lanes = len(lanes_data) if lanes_data else 0
-                        plural  = "s" if n_lanes != 1 else ""
-                        lanes_table_html = (
-                            '<div style="margin:20px 0">'
-                            '<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#374151;margin-bottom:12px">'
-                            + "Lane Details (" + str(n_lanes) + " Lane" + plural + ")" +
-                            '</div>' + lane_cards + '</div>'
-                        ) if lanes_data else ""
-
-                        schedule_note_html = (
-                            '<p style="font-size:13px;color:#059669;margin:8px 0">'
-                            '<strong>📎 Schedule sheet attached</strong> — please review before submitting your rate.</p>'
-                        ) if schedule_path else ''
+                # ── Step 2: Send emails one by one ─────────────────────────
+                for v in matched:
+                    if v.id not in vendor_tokens:
+                        continue  # token creation failed earlier, already in failed[]
+                    token_str  = vendor_tokens[v.id]
+                    quote_link = f'{base_url}/submit-quote/{rfq_rfq_id}/{token_str}'
+                    try:
 
                         html = f"""
 <html><body style="font-family:Arial,sans-serif;color:#1a1d23;max-width:650px;margin:0 auto;padding:20px">
@@ -294,6 +316,7 @@ def send_rfq_emails(rfq_id, rfq_subject, rfq_zone, rfq_rfq_id,
                         sent_emails.append(v.email)
 
                     except Exception as e:
+                        logger.error(f'Email send failed for {v.name!r} ({v.email}): {e}')
                         failed.append(f"{v.email}: {str(e)}")
 
                 # Delete schedule file after sending
