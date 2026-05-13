@@ -71,7 +71,7 @@ def bulk_add_quotes(rfq_id):
             if not vendor_name or cost <= 0:
                 continue
             lane = db.session.get(Lane, lane_id)
-            kms  = lane.kms or 0 if lane else 0
+            kms  = (lane.kms or 0) if lane else 0
             cpk  = round(cost / kms, 2) if kms > 0 else 0
 
             # Update if exists, else insert
@@ -188,8 +188,6 @@ def send_thankyou_email(rfq_id):
                             f'Thank You for Your Quote — {rfq_obj.rfq_id}', html)
                     except Exception as e:
                         logger.error(f'Thankyou email error for {vname}: {e}')
-                rfq_obj.thankyou_sent = True
-                db.session.commit()
             except Exception as e:
                 logger.error(f'Thankyou email error: {e}')
     threading.Thread(target=_send, daemon=True).start()

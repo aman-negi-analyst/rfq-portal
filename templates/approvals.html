@@ -1,5 +1,10 @@
 {% extends 'base.html' %}
-{% block title %}Approvals — RFQ Portal
+{% block title %}Approvals — RFQ Portal{% endblock %}
+{% block topbar_title %}Approvals{% endblock %}
+{% block topbar_sub %}RFQs pending your review{% endblock %}
+
+{% block content %}
+
 <!-- Email Preview Modal -->
 <div id="approve-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:12px;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
@@ -11,7 +16,6 @@
       <button onclick="document.getElementById('approve-modal').style.display='none'" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:16px">✕</button>
     </div>
     <div style="padding:24px">
-      <!-- Preview card -->
       <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:20px">
         <div style="background:linear-gradient(135deg,#4f46e5,#6366f1);padding:16px 20px">
           <div style="color:#fff;font-weight:700;font-size:15px">RFQ Open for Bidding</div>
@@ -49,36 +53,44 @@
 
 <script>
 function showApprovePreview(rfqId, rfqCode, subject, zone, deadline, lanes) {
-  document.getElementById('prev-rfq-id').textContent  = rfqCode;
-  document.getElementById('prev-subject').textContent = subject;
-  document.getElementById('prev-zone').textContent    = zone;
+  document.getElementById('prev-rfq-id').textContent   = rfqCode;
+  document.getElementById('prev-subject').textContent  = subject;
+  document.getElementById('prev-zone').textContent     = zone;
   document.getElementById('prev-deadline').textContent = deadline;
-  document.getElementById('prev-lanes').textContent   = lanes + ' lane(s)';
+  document.getElementById('prev-lanes').textContent    = lanes + ' lane(s)';
   document.getElementById('approve-form').action = '/rfqs/' + rfqId + '/approve';
   document.getElementById('approve-modal').style.display = 'flex';
 }
 </script>
-
-{% endblock %}
-{% block topbar_title %}Approvals{% endblock %}
-{% block topbar_sub %}RFQs pending your review{% endblock %}
-
-{% block content %}
-
 
 <div class="card">
   <div class="card-header"><h3>Pending Approvals</h3><span class="chip">{{ rfqs|length }}</span></div>
   <div class="table-wrap">
     {% if rfqs %}
     <table>
-      <thead><tr><th>RFQ ID</th><th>Subject</th><th>Zone</th><th>Deadline</th><th>Created By</th><th>Created At</th><th>Lanes</th><th>Actions</th></tr></thead>
+      <thead>
+        <tr>
+          <th>RFQ ID</th>
+          <th>Subject</th>
+          <th>Zone</th>
+          <th>Deadline</th>
+          <th>Created By</th>
+          <th>Created At</th>
+          <th>Lanes</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
       <tbody>
       {% for r in rfqs %}
       <tr>
         <td><span class="chip">{{ r.rfq_id }}</span></td>
-        <td style="font-weight:500"><a href="{{ url_for('rfq.rfq_detail', rfq_id=r.id) }}" style="color:var(--accent)">{{ r.subject }}</a></td>
+        <td style="font-weight:500">
+          <a href="{{ url_for('rfq.rfq_detail', rfq_id=r.id) }}" style="color:var(--accent)">{{ r.subject }}</a>
+        </td>
         <td>{{ r.zone or '—' }}</td>
-        <td style="{% if r.deadline and r.deadline < today %}color:var(--danger){% endif %}">{{ r.deadline.strftime('%d %b %Y') if r.deadline else '—' }}</td>
+        <td style="{% if r.deadline and r.deadline < today %}color:var(--danger){% endif %}">
+          {{ r.deadline.strftime('%d %b %Y') if r.deadline else '—' }}
+        </td>
         <td style="font-size:13px">
           {% if r.created_by %}
           <div style="display:flex;align-items:center;gap:6px">
@@ -90,20 +102,17 @@ function showApprovePreview(rfqId, rfqCode, subject, zone, deadline, lanes) {
         <td style="color:var(--text-2);font-size:13px">{{ r.created_at.strftime('%d %b %Y') }}</td>
         <td style="text-align:center">{{ r.lanes|length }}</td>
         <td>
-          {% if true %}
           <div class="table-actions">
+            <a href="{{ url_for('rfq.rfq_detail', rfq_id=r.id) }}" class="btn btn-secondary btn-sm">👁 View</a>
             <button type="button" class="btn btn-success btn-sm"
-              onclick="showApprovePreview({{ r.id }}, '{{ r.rfq_id }}', '{{ r.subject|replace("'","") }}', '{{ r.zone or 'N/A' }}', '{{ r.deadline.strftime('%d %b %Y') if r.deadline else 'Not set' }}', {{ r.lanes|length }})">
-              👁 Preview &amp; Approve
+              onclick="showApprovePreview({{ r.id }}, '{{ r.rfq_id }}', '{{ r.subject|replace("'","") }}', '{{ r.zone or "N/A" }}', '{{ r.deadline.strftime("%d %b %Y") if r.deadline else "Not set" }}', {{ r.lanes|length }})">
+              ✓ Preview &amp; Approve
             </button>
             <form method="POST" action="{{ url_for('rfq.reject_rfq', rfq_id=r.id) }}" style="display:inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Reject this RFQ?')">✕ Reject</button>
             </form>
           </div>
-          {% else %}
-          <span style="color:var(--text-3);font-size:12px">No permission</span>
-          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -114,4 +123,5 @@ function showApprovePreview(rfqId, rfqCode, subject, zone, deadline, lanes) {
     {% endif %}
   </div>
 </div>
+
 {% endblock %}

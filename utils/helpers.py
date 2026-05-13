@@ -137,7 +137,13 @@ def admin_required(f):
 
 def next_rfq_id() -> str:
     last = RFQ.query.order_by(RFQ.id.desc()).first()
-    num  = (last.id + 1) if last else 1
+    if last and last.rfq_id:
+        try:
+            num = int(last.rfq_id.split('-')[-1]) + 1
+        except (ValueError, IndexError):
+            num = (last.id + 1)
+    else:
+        num = 1
     return f'RFQ-{num:03d}'
 
 

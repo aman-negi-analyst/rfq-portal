@@ -156,6 +156,19 @@ def init_db(app: Flask) -> None:
             db.session.rollback()
             logger.warning(f'Auto migration skipped/failed: {e}')
 
+        # Add email2 column to vendors if missing
+        try:
+            if dialect == 'sqlite':
+                vendor_cols = [row[1] for row in db.session.execute(text("PRAGMA table_info(vendors)"))]
+            else:
+                vendor_cols = [row[0] for row in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='vendors'"))]
+            if 'email2' not in vendor_cols:
+                db.session.execute(text("ALTER TABLE vendors ADD COLUMN email2 VARCHAR(120)"))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.warning(f'Vendor email2 migration skipped: {e}')
+
         # Create default admin if no users exist
         if not User.query.first():
             import secrets as _s

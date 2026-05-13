@@ -62,39 +62,89 @@ def send_rfq_emails(rfq_id, rfq_subject, rfq_zone, rfq_rfq_id,
                 ).all()
 
                 matched = []
-                pan_india_keywords = [
-                    'pan india', 'pan-india', 'panindia', 'pan_india', 'pan india ',
-                    'pan indian', 'p.a.n india', 'pan  india',
+
+                # Keywords that indicate a vendor covers all of India
+                pan_india_keywords = {
+                    'pan india', 'pan-india', 'panindia', 'pan_india',
+                    'pan indian', 'p.a.n india',
                     'all india', 'all-india', 'allindia', 'all_india',
                     'all over india', 'all over', 'all states',
                     'national', 'nationwide', 'nation wide', 'nation-wide',
                     'india', 'india wide', 'india-wide', 'entire india',
                     'pan', 'p.i.',
-                ]
-                for v in all_vendors:
-                    v_region_raw = (v.region or '').strip().lower()
-                    is_pan_india = v_region_raw in pan_india_keywords
+                }
 
-                    import re as _re
-                    normalized = _re.sub(r'[/,;+&|_]+', '/', v_region_raw)
-                    normalized = _re.sub(r'\s+', ' ', normalized).strip()
-                    normalized = _re.sub(r'\s*/\s*', '/', normalized)
-                    v_regions = [r.strip() for r in normalized.split('/') if r.strip()]
+                # Single-letter abbreviation map
+                abbr_map = {'n': 'north', 's': 'south', 'e': 'east', 'w': 'west'}
 
-                    for part in v_regions:
+                def split_vendor_regions(raw):
+                    """
+                    Normalize a vendor region string into a list of clean region tokens.
+                    Handles: slashes, commas, semicolons, ampersands, pipes, plus,
+                              hyphens (when used as separators), and extra whitespace.
+                    Example: "South / Pan India" -> ["south", "pan india"]
+                             "South-North"       -> ["south", "north"]
+                             "south, east india" -> ["south", "east india"]
+                    """
+                    s = raw.strip().lower()
+                    # Replace separator characters with '/'
+                    # Include hyphen ONLY when surrounded by word chars (separator use)
+                    # but NOT when it's part of a known compound like 'pan-india'
+                    s = re.sub(r'[/,;+&|]+', '/', s)           # standard separators
+                    s = re.sub(r'\s*-\s*', '/', s)              # hyphen as separator
+                    s = re.sub(r'\s+', ' ', s).strip()
+                    s = re.sub(r'\s*/\s*', '/', s)
+                    parts = [p.strip() for p in s.split('/') if p.strip()]
+                    # Re-join "pan/india" back to "pan india" if hyphen split it
+                    rejoined = []
+                    i = 0
+                    while i < len(parts):
+                        # If this part + next together form a known keyword, merge
+                        if i + 1 < len(parts):
+                            merged = parts[i] + ' ' + parts[i + 1]
+                            if merged in pan_india_keywords:
+                                rejoined.append(merged)
+                                i += 2
+                                continue
+                        rejoined.append(parts[i])
+                        i += 1
+                    return rejoined
+
+                def is_pan_india_vendor(parts):
+                    """Return True if any region token indicates pan-India coverage."""
+                    for part in parts:
                         if part in pan_india_keywords:
-                            is_pan_india = True
-                            break
+                            return True
+                        # Also check if any word in the part is a pan-india keyword
+                        # e.g. "south pan india" contains "pan india"
+                        for kw in pan_india_keywords:
+                            if kw in part:
+                                return True
+                    return False
 
-                    abbr_map = {'n': 'north', 's': 'south', 'e': 'east', 'w': 'west'}
-                    expanded_regions = [abbr_map.get(r, r) for r in v_regions]
+                def region_matches(parts, rfq_rgn):
+                    """Return True if the vendor serves the RFQ's region."""
+                    if not rfq_rgn:
+                        return False
+                    for part in parts:
+                        # Expand single-letter abbreviations
+                        expanded = abbr_map.get(part, part)
+                        if expanded == rfq_rgn:
+                            return True
+                        # Direct exact match
+                        if part == rfq_rgn:
+                            return True
+                        # Handle "south india", "south zone" etc. — starts with the region
+                        if part.startswith(rfq_rgn + ' '):
+                            return True
+                    return False
 
-                    region_match = rfq_region and (
-                        rfq_region in expanded_regions or
-                        rfq_region in v_regions
-                    )
-
-                    if region_match or is_pan_india:
+                for v in all_vendors:
+                    v_region_raw = (v.region or '').strip()
+                    if not v_region_raw:
+                        continue
+                    parts = split_vendor_regions(v_region_raw)
+                    if is_pan_india_vendor(parts) or region_matches(parts, rfq_region):
                         matched.append(v)
 
                 if not matched:
@@ -228,6 +278,10 @@ def send_rfq_emails(rfq_id, rfq_subject, rfq_zone, rfq_rfq_id,
                             "subject": f"RFQ Open for Bidding — {rfq_rfq_id}: {rfq_subject}",
                             "html": html,
                         }
+
+                        # CC secondary email if present
+                        if getattr(v, 'email2', None) and v.email2.strip() and '@' in v.email2:
+                            params["cc"] = [v.email2.strip()]
 
                         if attachment_data:
                             attach_name = schedule_filename or os.path.basename(schedule_path)

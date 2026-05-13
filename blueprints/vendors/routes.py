@@ -103,7 +103,8 @@ def import_vendors():
             'sfx_vendor_name': ['sfx vendor name', 'sfx name', 'sfxvendorname'],
             'poc':             ['poc', 'contact person', 'contactperson'],
             'contact_number':  ['contact number', 'contactnumber', 'phone', 'mobile', 'contact no'],
-            'email':           ['email', 'email id', 'emailid'],
+            'email':           ['email', 'email id', 'emailid', 'primary email', 'email 1', 'email1'],
+            'email2':          ['email2', 'secondary email', 'email 2', 'poc2 email', 'poc 2 email', 'alternate email'],
             'region':          ['region'],
             'state':           ['state'],
             'city':            ['city'],
@@ -125,6 +126,12 @@ def import_vendors():
             return ''
 
         if replace == 'yes':
+            # Must delete quote tokens first to avoid FK constraint errors
+            QuoteToken.query.filter(
+                QuoteToken.vendor_id.in_(
+                    db.session.query(Vendor.id)
+                )
+            ).delete(synchronize_session=False)
             Vendor.query.delete()
             db.session.flush()
 
@@ -153,6 +160,7 @@ def import_vendors():
                 poc             = get_val(row, 'poc'),
                 contact_number  = get_val(row, 'contact_number'),
                 email           = get_val(row, 'email'),
+                email2          = get_val(row, 'email2'),
                 region          = get_val(row, 'region'),
                 state           = get_val(row, 'state'),
                 city            = get_val(row, 'city'),
@@ -193,14 +201,14 @@ def export_vendors():
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['Status','Vendor Code','Vendor Name','SFX Vendor Name','POC',
-                     'Contact Number','Email','Region','State','City','Fleet Type','Type',
+                     'Contact Number','Email','Email2','Region','State','City','Fleet Type','Type',
                      'Additional Info / Referred by','Onboarded Date','Remarks 1',
                      'Remarks 2','KYC Recalling Remarks','Working with us - YES / NO'])
     for v in vendors_all:
         writer.writerow([v.status, v.vendor_code, v.name, v.sfx_vendor_name,
-                         v.poc, v.contact_number, v.email, v.region, v.state,
-                         v.city, v.fleet_type, v.vendor_type, v.additional_info,
-                         v.onboarded_date, v.remarks1, v.remarks2,
+                         v.poc, v.contact_number, v.email, v.email2 or '',
+                         v.region, v.state, v.city, v.fleet_type, v.vendor_type,
+                         v.additional_info, v.onboarded_date, v.remarks1, v.remarks2,
                          v.kyc_remarks, v.working_with_us])
     output.seek(0)
     return Response(output.getvalue(), mimetype='text/csv',
@@ -219,6 +227,7 @@ def save_vendor():
         poc             = request.form.get('poc', '').strip(),
         contact_number  = request.form.get('contact_number', '').strip(),
         email           = request.form.get('email', '').strip(),
+        email2          = request.form.get('email2', '').strip(),
         region          = request.form.get('region', '').strip(),
         state           = request.form.get('state', '').strip(),
         city            = request.form.get('city', '').strip(),
@@ -300,9 +309,15 @@ def save_vendor():
 @login_required
 def delete_vendor(vid):
     v = Vendor.query.get_or_404(vid)
-    db.session.delete(v)
-    db.session.commit()
-    flash('Vendor deleted.', 'info')
+    try:
+        # Delete related quote tokens explicitly (safety net for all DB engines)
+        QuoteToken.query.filter_by(vendor_id=vid).delete(synchronize_session=False)
+        db.session.delete(v)
+        db.session.commit()
+        flash(f'✅ Vendor "{v.name}" deleted.', 'info')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Delete failed: {str(e)}', 'error')
     return redirect(url_for('vendors.vendors'))
 
 
@@ -318,12 +333,14 @@ def bulk_delete_vendors():
         if not ids:
             flash('No valid vendors selected.', 'warning')
             return redirect(url_for('vendors.vendors'))
+        # Delete related quote tokens first to avoid FK constraint errors
+        QuoteToken.query.filter(QuoteToken.vendor_id.in_(ids)).delete(synchronize_session=False)
         deleted = Vendor.query.filter(Vendor.id.in_(ids)).delete(synchronize_session=False)
         db.session.commit()
         flash(f'✅ {deleted} vendor{"s" if deleted != 1 else ""} deleted successfully.', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Delete failed: {str(e)}', 'error')
+        flash(f'❌ Delete failed: {str(e)}', 'error')
     return redirect(url_for('vendors.vendors'))
 
 
@@ -542,11 +559,14 @@ def vendor_import_template():
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['name','vendor_code','sfx_vendor_name','poc','contact_number',
-                     'email','region','state','city','fleet_type','vendor_type',
+                     'email','email2','region','state','city','fleet_type','vendor_type',
                      'working_with_us','status','additional_info'])
     writer.writerow(['Sharma Logistics','VND001','Sharma Log Pvt Ltd','Rajesh Sharma',
-                     '9876543210','ops@sharma.com','North','Delhi','Delhi',
-                     'HCV','Transport','Working','Active','Trusted partner since 2020'])
+                     '9876543210','ops@sharma.com','finance@sharma.com','North/Pan India','Delhi','Delhi',
+                     'HCV','FTL','Working','Active','Trusted partner since 2020'])
+    writer.writerow(['Patel Transport','VND002','','Kiran Patel',
+                     '9988776655','patel@transport.in','','South','Karnataka','Bangalore',
+                     '22 Feet','Zonal','Working','Active',''])
     output.seek(0)
     return Response(output.getvalue(), mimetype='text/csv',
         headers={'Content-Disposition': 'attachment;filename=vendor_import_template.csv'})

@@ -606,7 +606,7 @@ def export_rfqs_excel():
             fc or '',
             savings if fc else '',
             r.rca_reason or '',
-            to_ist(r.created_at).strftime('%d/%m/%Y %H:%M') if r.created_at else ''
+            r.created_at.strftime('%d/%m/%Y %H:%M') if r.created_at else ''
         ])
 
     output.seek(0)
@@ -659,7 +659,7 @@ def export_rfq_quotes(rfq_id):
             q.vendor_name,
             q.quoted_cost,
             q.quoted_cpk,
-            to_ist(q.submitted_at).strftime('%d/%m/%Y %H:%M') if q.submitted_at else ''
+            q.submitted_at.strftime('%d/%m/%Y %H:%M') if q.submitted_at else ''
         ])
 
     output.seek(0)
@@ -678,17 +678,9 @@ def export_rfq_quotes(rfq_id):
 @bp.route('/rfqs/<int:rfq_id>/schedule')
 @login_required
 def download_schedule(rfq_id):
-    from flask import send_from_directory
-    rfq = RFQ.query.get_or_404(rfq_id)
-    if not rfq.schedule_file:
-        flash('No schedule file attached to this RFQ.', 'warning')
-        return redirect(url_for('rfq.rfq_detail', rfq_id=rfq_id))
-    return send_from_directory(
-        current_app.config['UPLOAD_FOLDER'],
-        rfq.schedule_file,
-        as_attachment=True,
-        download_name=rfq.schedule_filename or rfq.schedule_file
-    )
+    # Schedule files are sent by email at approval time and not persisted on the model.
+    flash('Schedule files are attached to vendor emails at approval time and are not stored on the server.', 'warning')
+    return redirect(url_for('rfq.rfq_detail', rfq_id=rfq_id))
 
 
 # ══════════════════════════════════════════════

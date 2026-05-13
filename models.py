@@ -33,6 +33,7 @@ class Vendor(db.Model):
     vendor_code     = db.Column(db.String(50))
     name            = db.Column(db.String(150), nullable=False)
     sfx_vendor_name = db.Column(db.String(150))
+    email2          = db.Column(db.String(120))   # secondary / ops email
     poc             = db.Column(db.String(100))
     contact_number  = db.Column(db.String(30))
     email           = db.Column(db.String(120))
@@ -48,6 +49,11 @@ class Vendor(db.Model):
     kyc_remarks     = db.Column(db.Text)
     working_with_us = db.Column(db.String(10))
     created_at      = db.Column(db.DateTime, default=now_ist)
+
+    # Cascade-delete quote tokens when vendor is deleted
+    quote_tokens = db.relationship('QuoteToken', backref='vendor', lazy=True,
+                                   foreign_keys='QuoteToken.vendor_id',
+                                   cascade='all, delete-orphan', passive_deletes=True)
 
 
 class RFQ(db.Model):

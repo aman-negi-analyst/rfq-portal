@@ -1,32 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Vendor Master — RFQ Portal{% if pagination and pagination.pages > 1 %}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;padding:12px 16px;background:#fff;border:1px solid #e5e7eb;border-radius:8px">
-  <div style="font-size:13px;color:#6b7280">
-    Showing {{ (page-1)*per_page + 1 }}–{{ [page*per_page, pagination.total]|min }} of {{ pagination.total }} results
-  </div>
-  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    {% if pagination.has_prev %}
-    <a href="?{{ request.args|replace('page', page-1) }}" class="btn btn-ghost btn-sm" onclick="this.href='?'+window.location.search.substring(1).replace(/page=\d+/,'page={{ page-1 }}').replace(/^&/,''); if(!this.href.includes('page=')) this.href+='&page={{ page-1 }}'; return true;">← Prev</a>
-    {% endif %}
-    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-      {% if p %}
-        {% if p == page %}
-        <span style="padding:4px 10px;background:var(--accent);color:#fff;border-radius:6px;font-size:13px;font-weight:600">{{ p }}</span>
-        {% else %}
-        <a href="?page={{ p }}&search={{ search }}&region={{ region }}&state={{ state }}&working={{ working }}&fleet_type={{ fleet_type }}&vendor_type={{ vendor_type }}" style="padding:4px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;color:#374151;text-decoration:none">{{ p }}</a>
-        {% endif %}
-      {% else %}
-        <span style="color:#9ca3af">…</span>
-      {% endif %}
-    {% endfor %}
-    {% if pagination.has_next %}
-    <a href="?page={{ page+1 }}&search={{ search }}&region={{ region }}&state={{ state }}&working={{ working }}&fleet_type={{ fleet_type }}&vendor_type={{ vendor_type }}" class="btn btn-ghost btn-sm">Next →</a>
-    {% endif %}
-  </div>
-</div>
-{% endif %}
-
-{% endblock %}
+{% block title %}Vendor Master — RFQ Portal{% endblock %}
 {% block topbar_title %}Vendor Master{% endblock %}
 {% block topbar_sub %}{{ total }} vendor{{ 's' if total != 1 }} in database{% endblock %}
 {% block topbar_actions %}
@@ -39,8 +12,6 @@
 {% endblock %}
 
 {% block content %}
-
-
 
 <!-- Search & Filters -->
 <form method="GET" id="filterForm">
@@ -61,13 +32,19 @@
       <option value="{{ s }}" {% if state==s %}selected{% endif %}>{{ s }}</option>
       {% endfor %}
     </select>
+    <select name="fleet_type" class="filter-select" onchange="this.form.submit()">
+      <option value="">All Fleet Types</option>
+      {% for ft in fleet_types %}
+      <option value="{{ ft }}" {% if fleet_type==ft %}selected{% endif %}>{{ ft }}</option>
+      {% endfor %}
+    </select>
     <select name="working" class="filter-select" onchange="this.form.submit()">
       <option value="">All Vendors</option>
       <option value="working" {% if working=='working' %}selected{% endif %}>Working ✅</option>
       <option value="not"     {% if working=='not'     %}selected{% endif %}>Not Working ❌</option>
     </select>
     <button type="submit" class="btn btn-secondary btn-sm">Search</button>
-    {% if search or region or state or working %}
+    {% if search or region or state or working or fleet_type %}
     <a href="{{ url_for('vendors.vendors') }}" class="btn btn-ghost btn-sm">✕ Clear</a>
     {% endif %}
   </div>
@@ -89,7 +66,8 @@
         <th>SFX Vendor Name</th>
         <th>POC</th>
         <th>Contact</th>
-        <th>Email</th>
+        <th>Email (Primary)</th>
+        <th>Email (Secondary)</th>
         <th>Region</th>
         <th>State</th>
         <th>City</th>
@@ -108,16 +86,12 @@
     {% for v in vendors %}
     {% set wl = (v.working_with_us or '')|lower %}
     <tr id="row-{{ v.id }}" class="vendor-row">
-      <!-- CHECKBOX -->
       <td class="col-check" style="position:sticky;left:0;z-index:4;background:#fff;width:40px;text-align:center;border-right:none">
-        <input type="checkbox" class="row-check" value="{{ v.id }}"
-               onclick="updateSelection()"
+        <input type="checkbox" class="row-check" value="{{ v.id }}" onclick="updateSelection()"
                style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent)"/>
       </td>
-      <!-- FROZEN: Vendor Name -->
       <td class="col-name" title="{{ v.name }}">{{ v.name }}</td>
 
-      <!-- Status -->
       <td>
         {% if v.status %}
         {% set sl = v.status|lower %}
@@ -127,68 +101,41 @@
         {% else %}—{% endif %}
       </td>
 
-      <!-- Code -->
       <td style="font-family:monospace;color:var(--accent);font-weight:700;font-size:11px">
         {{ v.vendor_code or '—' }}
       </td>
-
-      <!-- SFX Name -->
-      <td title="{{ v.sfx_vendor_name or '' }}" style="color:var(--text-2)">
-        {{ v.sfx_vendor_name or '—' }}
-      </td>
-
-      <!-- POC -->
+      <td title="{{ v.sfx_vendor_name or '' }}" style="color:var(--text-2)">{{ v.sfx_vendor_name or '—' }}</td>
       <td>{{ v.poc or '—' }}</td>
-
-      <!-- Contact -->
       <td>{{ v.contact_number or '—' }}</td>
 
-      <!-- Email -->
       <td>
         {% if v.email %}
         <a href="mailto:{{ v.email }}" style="color:var(--accent)">{{ v.email }}</a>
         {% else %}—{% endif %}
       </td>
 
-      <!-- Region -->
-      <td><span class="zone-tag" style="font-size:11px">{{ v.region or '—' }}</span></td>
+      <td>
+        {% if v.email2 %}
+        <a href="mailto:{{ v.email2 }}" style="color:var(--accent);font-size:12px">{{ v.email2 }}</a>
+        {% else %}<span style="color:var(--text-3)">—</span>{% endif %}
+      </td>
 
-      <!-- State -->
+      <td>
+        {% if v.region %}
+        <span class="zone-tag" style="font-size:11px">{{ v.region }}</span>
+        {% else %}—{% endif %}
+      </td>
+
       <td style="color:var(--text-2)">{{ v.state or '—' }}</td>
-
-      <!-- City -->
       <td title="{{ v.city or '' }}" style="color:var(--text-2)">{{ v.city or '—' }}</td>
-
-      <!-- Fleet Type -->
       <td style="color:var(--text-2)">{{ v.fleet_type or '—' }}</td>
-
-      <!-- Type -->
       <td style="color:var(--text-2)">{{ v.vendor_type or '—' }}</td>
-
-      <!-- Onboarded -->
       <td style="color:var(--text-2)">{{ v.onboarded_date or '—' }}</td>
+      <td title="{{ v.additional_info or '' }}" style="color:var(--text-2);max-width:140px">{{ v.additional_info or '—' }}</td>
+      <td title="{{ v.remarks1 or '' }}" style="color:var(--text-2);max-width:140px">{{ v.remarks1 or '—' }}</td>
+      <td title="{{ v.remarks2 or '' }}" style="color:var(--text-2);max-width:140px">{{ v.remarks2 or '—' }}</td>
+      <td title="{{ v.kyc_remarks or '' }}" style="color:var(--text-2);max-width:140px">{{ v.kyc_remarks or '—' }}</td>
 
-      <!-- Additional Info -->
-      <td title="{{ v.additional_info or '' }}" style="color:var(--text-2);max-width:140px">
-        {{ v.additional_info or '—' }}
-      </td>
-
-      <!-- Remarks 1 -->
-      <td title="{{ v.remarks1 or '' }}" style="color:var(--text-2);max-width:140px">
-        {{ v.remarks1 or '—' }}
-      </td>
-
-      <!-- Remarks 2 -->
-      <td title="{{ v.remarks2 or '' }}" style="color:var(--text-2);max-width:140px">
-        {{ v.remarks2 or '—' }}
-      </td>
-
-      <!-- KYC Remarks -->
-      <td title="{{ v.kyc_remarks or '' }}" style="color:var(--text-2);max-width:140px">
-        {{ v.kyc_remarks or '—' }}
-      </td>
-
-      <!-- Working -->
       <td style="text-align:center">
         {% if wl in ['yes','y','working'] %}
           <span style="color:var(--success);font-weight:600;font-size:11px">✅ Yes</span>
@@ -199,7 +146,6 @@
         {% else %}—{% endif %}
       </td>
 
-      <!-- FROZEN RIGHT: Actions -->
       <td class="col-actions">
         <div style="display:flex;gap:4px">
           <button class="btn btn-secondary btn-sm"
@@ -212,6 +158,7 @@
               '{{ (v.poc or '')|replace("'","") }}',
               '{{ (v.contact_number or '')|replace("'","") }}',
               '{{ (v.email or '')|replace("'","") }}',
+              '{{ (v.email2 or '')|replace("'","") }}',
               '{{ (v.region or '')|replace("'","") }}',
               '{{ (v.state or '')|replace("'","") }}',
               '{{ (v.city or '')|replace("'","") }}',
@@ -224,9 +171,10 @@
               '{{ (v.kyc_remarks or '')|replace("'","")|replace("\n"," ")|replace("\r"," ") }}',
               '{{ (v.additional_info or '')|replace("'","") }}'
             )">Edit</button>
+          <a href="{{ url_for('vendors.vendor_history', vid=v.id) }}" class="btn btn-ghost btn-sm" title="View history">📋</a>
           <form method="POST" action="{{ url_for('vendors.delete_vendor', vid=v.id) }}" style="display:inline"
                 onsubmit="return confirm('Delete {{ v.name }}?')">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--danger)">Del</button>
           </form>
         </div>
@@ -245,26 +193,46 @@
         No vendors match your filters.
         <a href="{{ url_for('vendors.vendors') }}" style="color:var(--accent)">Clear filters</a>
       {% else %}
-        Click <strong>⬆ Import</strong> above to load your vendor list from CSV or Excel
+        Click <strong>+ Add Vendor</strong> to add one manually, or <strong>⬆ Import</strong> to load from CSV/Excel.
       {% endif %}
     </p>
   </div>
   {% endif %}
 </div>
 
-
-<!-- Record count bar -->
+<!-- Record count & pagination -->
 <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px;font-size:12px;color:var(--text-2)">
   <span>
     {% if search or region or state or working %}
-      <strong>{{ vendors|length }}</strong> vendor{{ 's' if vendors|length != 1 }} found
-      (filtered from {{ total }} total)
+      <strong>{{ vendors|length }}</strong> vendor{{ 's' if vendors|length != 1 }} found (filtered from {{ total }} total)
     {% else %}
       Showing all <strong>{{ total }}</strong> vendor{{ 's' if total != 1 }}
     {% endif %}
   </span>
   <span style="color:var(--text-3)">↕ Scroll vertically · ↔ Scroll horizontally</span>
 </div>
+
+{% if pagination and pagination.pages > 1 %}
+<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:16px;flex-wrap:wrap">
+  {% if pagination.has_prev %}
+  <a href="?page={{ page-1 }}&search={{ search }}&region={{ region }}&state={{ state }}&working={{ working }}&fleet_type={{ fleet_type }}&vendor_type={{ vendor_type }}" class="btn btn-ghost btn-sm">← Prev</a>
+  {% endif %}
+  {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+    {% if p %}
+      {% if p == page %}
+      <span style="padding:4px 10px;background:var(--accent);color:#fff;border-radius:6px;font-size:13px;font-weight:600">{{ p }}</span>
+      {% else %}
+      <a href="?page={{ p }}&search={{ search }}&region={{ region }}&state={{ state }}&working={{ working }}&fleet_type={{ fleet_type }}&vendor_type={{ vendor_type }}" style="padding:4px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;color:#374151;text-decoration:none">{{ p }}</a>
+      {% endif %}
+    {% else %}
+      <span style="color:#9ca3af">…</span>
+    {% endif %}
+  {% endfor %}
+  {% if pagination.has_next %}
+  <a href="?page={{ page+1 }}&search={{ search }}&region={{ region }}&state={{ state }}&working={{ working }}&fleet_type={{ fleet_type }}&vendor_type={{ vendor_type }}" class="btn btn-ghost btn-sm">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
 
 
 <!-- ═══ IMPORT MODAL ═══ -->
@@ -280,7 +248,8 @@
         <div class="info-box">
           Upload your vendor list as <strong>.csv</strong> or <strong>.xlsx</strong> file.<br>
           First row must be the <strong>header row</strong>.<br>
-          All 18 columns from your format are supported automatically.
+          All columns including <strong>email2</strong> (secondary email) are supported.<br>
+          <a href="{{ url_for('vendors.vendor_import_template') }}" style="color:var(--accent);font-size:12px">⬇ Download template</a>
         </div>
         <div class="form-group" style="margin-top:14px">
           <label>Select File *</label>
@@ -316,17 +285,22 @@
     </div>
     <form method="POST" action="{{ url_for('vendors.save_vendor') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="modal-body" style="max-height:70vh;overflow-y:auto">
+      <div class="modal-body" style="max-height:75vh;overflow-y:auto">
         <input type="hidden" name="vendor_id" id="v-id">
+
+        <!-- ── Section: Identity ── -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid var(--border)">Identity</div>
         <div class="form-row">
           <div class="form-group">
             <label>Status</label>
             <select name="status" id="v-status">
               <option value="">Select...</option>
-              <option>Working</option>
-              <option>Not Working</option>
-              <option>Onboarding</option>
-              <option>Blacklisted</option>
+              <option value="Working">Working</option>
+              <option value="Not Working">Not Working</option>
+              <option value="Onboarding">Onboarding</option>
+              <option value="Blacklisted">Blacklisted</option>
+              <option value="Prospect">Prospect</option>
+              <option value="Inactive">Inactive</option>
             </select>
           </div>
           <div class="form-group">
@@ -337,16 +311,19 @@
         <div class="form-row">
           <div class="form-group">
             <label>Vendor Name *</label>
-            <input type="text" name="name" id="v-name" required placeholder="Company name"/>
+            <input type="text" name="name" id="v-name" required placeholder="Company / trade name"/>
           </div>
           <div class="form-group">
             <label>SFX Vendor Name</label>
-            <input type="text" name="sfx_vendor_name" id="v-sfx" placeholder="e.g. Speedfox - FTL"/>
+            <input type="text" name="sfx_vendor_name" id="v-sfx" placeholder="Name used in Shadowfax system"/>
           </div>
         </div>
+
+        <!-- ── Section: Contact ── -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin:16px 0 10px;padding-bottom:4px;border-bottom:1px solid var(--border)">Contact Details</div>
         <div class="form-row">
           <div class="form-group">
-            <label>POC</label>
+            <label>POC (Point of Contact)</label>
             <input type="text" name="poc" id="v-poc" placeholder="Contact person name"/>
           </div>
           <div class="form-group">
@@ -354,63 +331,94 @@
             <input type="text" name="contact_number" id="v-phone" placeholder="9650949444"/>
           </div>
         </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" name="email" id="v-email" placeholder="poc@vendor.com"/>
-        </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Region</label>
-            <select name="region" id="v-region">
-              <option value="">Select...</option>
-              {% for r in ['North','South','East','West','Central','National','Pan India'] %}
-              <option value="{{ r }}">{{ r }}</option>
-              {% endfor %}
-            </select>
+            <label>Primary Email</label>
+            <input type="email" name="email" id="v-email" placeholder="poc@vendor.com"/>
+            <div style="font-size:11px;color:var(--text-3);margin-top:3px">Used for RFQ bidding invitations</div>
           </div>
+          <div class="form-group">
+            <label>Secondary Email</label>
+            <input type="email" name="email2" id="v-email2" placeholder="ops@vendor.com (optional)"/>
+            <div style="font-size:11px;color:var(--text-3);margin-top:3px">CC'd on all RFQ emails</div>
+          </div>
+        </div>
+
+        <!-- ── Section: Coverage ── -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin:16px 0 10px;padding-bottom:4px;border-bottom:1px solid var(--border)">Geographic Coverage</div>
+
+        <div class="form-group">
+          <label>Region(s) Covered</label>
+          <div id="region-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)">
+            {% for r in ['North','South','East','West','Central','National','Pan India'] %}
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:500;cursor:pointer;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:#fff;transition:all .15s" id="rlabel-{{ r }}">
+              <input type="checkbox" class="region-cb" value="{{ r }}" onchange="syncRegion()" style="accent-color:var(--accent)"/>
+              {{ r }}
+            </label>
+            {% endfor %}
+          </div>
+          <!-- Hidden field that stores the final comma-joined value -->
+          <input type="hidden" name="region" id="v-region"/>
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px">Select all zones this vendor can service. Multi-zone vendors receive RFQs for any of their selected zones.</div>
+        </div>
+
+        <div class="form-row">
           <div class="form-group">
             <label>State</label>
-            <input type="text" name="state" id="v-state" placeholder="e.g. Delhi"/>
+            <input type="text" name="state" id="v-state" placeholder="e.g. Delhi, Maharashtra"/>
+          </div>
+          <div class="form-group">
+            <label>City / Coverage Area</label>
+            <input type="text" name="city" id="v-city" placeholder="e.g. Delhi-NCR, Mumbai, Pune"/>
           </div>
         </div>
+
+        <!-- ── Section: Fleet & Type ── -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin:16px 0 10px;padding-bottom:4px;border-bottom:1px solid var(--border)">Fleet &amp; Capabilities</div>
         <div class="form-row">
-          <div class="form-group">
-            <label>City / Coverage</label>
-            <input type="text" name="city" id="v-city" placeholder="e.g. Delhi-NCR, Pan India"/>
-          </div>
           <div class="form-group">
             <label>Fleet Type</label>
-            <input type="text" name="fleet_type" id="v-fleet" placeholder="e.g. 22 Feet - 32 Feet"/>
+            <input type="text" name="fleet_type" id="v-fleet" placeholder="e.g. 22 Feet, Trailer, LCV, HCV"
+                   list="fleet-type-suggestions"/>
+            <datalist id="fleet-type-suggestions">
+              <option value="LCV">
+              <option value="HCV">
+              <option value="Trailer">
+              <option value="22 Feet">
+              <option value="32 Feet">
+              <option value="Bolero">
+              <option value="Tata 407">
+              <option value="Container">
+              <option value="Open Body">
+              <option value="Refrigerated">
+              <option value="Two Wheeler">
+              <option value="Three Wheeler">
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label>Vendor Type</label>
+            <input type="text" name="vendor_type" id="v-type" placeholder="e.g. FTL, PTL, Last Mile"
+                   list="vendor-type-suggestions"/>
+            <datalist id="vendor-type-suggestions">
+              <option value="FTL">
+              <option value="PTL">
+              <option value="Last Mile">
+              <option value="National">
+              <option value="Zonal">
+              <option value="Local">
+              <option value="Express">
+              <option value="Cold Chain">
+              <option value="Aggregator">
+            </datalist>
           </div>
         </div>
+
+        <!-- ── Section: Onboarding ── -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);margin:16px 0 10px;padding-bottom:4px;border-bottom:1px solid var(--border)">Onboarding &amp; Remarks</div>
         <div class="form-row">
-          <div class="form-group">
-            <label>Type</label>
-            <input type="text" name="vendor_type" id="v-type" placeholder="e.g. National, Zonal"/>
-          </div>
           <div class="form-group">
             <label>Onboarded Date</label>
             <input type="text" name="onboarded_date" id="v-date" placeholder="e.g. Jan 2024"/>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Additional Info / Referred by</label>
-          <input type="text" name="additional_info" id="v-info" placeholder="How we found this vendor"/>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Remarks 1</label>
-            <textarea name="remarks1" id="v-rem1" style="min-height:60px" placeholder="e.g. KYC filled..."></textarea>
-          </div>
-          <div class="form-group">
-            <label>Remarks 2</label>
-            <textarea name="remarks2" id="v-rem2" style="min-height:60px" placeholder="Additional remarks..."></textarea>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>KYC Recalling Remarks</label>
-            <textarea name="kyc_remarks" id="v-kyc" style="min-height:60px" placeholder="KYC status notes..."></textarea>
           </div>
           <div class="form-group">
             <label>Working with us?</label>
@@ -420,9 +428,29 @@
               <option value="Not Working">Not Working</option>
               <option value="Yes">Yes</option>
               <option value="No">No</option>
+              <option value="Probation">Probation</option>
             </select>
           </div>
         </div>
+        <div class="form-group">
+          <label>Additional Info / Referred by</label>
+          <input type="text" name="additional_info" id="v-info" placeholder="How we found this vendor, referral source, etc."/>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Remarks 1</label>
+            <textarea name="remarks1" id="v-rem1" style="min-height:60px" placeholder="e.g. KYC completed, documents verified..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Remarks 2</label>
+            <textarea name="remarks2" id="v-rem2" style="min-height:60px" placeholder="Additional remarks..."></textarea>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>KYC Recalling Remarks</label>
+          <textarea name="kyc_remarks" id="v-kyc" style="min-height:60px" placeholder="KYC status, pending documents..."></textarea>
+        </div>
+
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeModal('vendor-modal')">Cancel</button>
@@ -436,10 +464,59 @@
 
 {% block scripts %}
 <script>
+// ── Region checkbox sync ──────────────────────
+function syncRegion() {
+  var checked = Array.from(document.querySelectorAll('.region-cb:checked')).map(cb => cb.value);
+  document.getElementById('v-region').value = checked.join('/');
+  // Visual feedback — highlight checked labels
+  document.querySelectorAll('.region-cb').forEach(function(cb) {
+    var lbl = cb.closest('label');
+    if (cb.checked) {
+      lbl.style.background = 'var(--accent)';
+      lbl.style.color = '#fff';
+      lbl.style.borderColor = 'var(--accent)';
+    } else {
+      lbl.style.background = '#fff';
+      lbl.style.color = '';
+      lbl.style.borderColor = 'var(--border)';
+    }
+  });
+  // If "Pan India" or "National" is checked, check all and disable others
+  var panChecked = Array.from(document.querySelectorAll('.region-cb:checked'))
+    .some(cb => ['Pan India','National'].includes(cb.value));
+  document.querySelectorAll('.region-cb').forEach(function(cb) {
+    if (!['Pan India','National'].includes(cb.value)) {
+      cb.disabled = panChecked;
+      cb.closest('label').style.opacity = panChecked ? '0.5' : '1';
+    }
+  });
+}
+
+function setRegionCheckboxes(regionStr) {
+  // Reset all
+  document.querySelectorAll('.region-cb').forEach(function(cb) {
+    cb.checked = false;
+    cb.disabled = false;
+    var lbl = cb.closest('label');
+    lbl.style.background = '#fff';
+    lbl.style.color = '';
+    lbl.style.borderColor = 'var(--border)';
+    lbl.style.opacity = '1';
+  });
+  if (!regionStr) return;
+  // Split by common separators and check matching boxes
+  var parts = regionStr.split(/[\/,;]+/).map(s => s.trim()).filter(Boolean);
+  document.querySelectorAll('.region-cb').forEach(function(cb) {
+    if (parts.some(p => p.toLowerCase() === cb.value.toLowerCase())) {
+      cb.checked = true;
+    }
+  });
+  syncRegion();
+}
+
 // ── Select All / Bulk Delete ──────────────────
 function toggleSelectAll(masterCb) {
-  var checkboxes = document.querySelectorAll('.row-check');
-  checkboxes.forEach(function(cb) {
+  document.querySelectorAll('.row-check').forEach(function(cb) {
     cb.checked = masterCb.checked;
     var row = cb.closest('tr');
     if (row) row.style.background = masterCb.checked ? '#eef2ff' : '';
@@ -453,20 +530,12 @@ function updateSelection() {
   var btn     = document.getElementById('delete-selected-btn');
   var count   = document.getElementById('selected-count');
   var master  = document.getElementById('select-all');
-
-  // Update count badge
   if (count) count.textContent = checked.length;
-
-  // Show/hide delete button
   if (btn) btn.style.display = checked.length > 0 ? 'inline-flex' : 'none';
-
-  // Update master checkbox state
   if (master) {
     master.indeterminate = checked.length > 0 && checked.length < total.length;
-    master.checked       = checked.length === total.length && total.length > 0;
+    master.checked = checked.length === total.length && total.length > 0;
   }
-
-  // Highlight selected rows
   document.querySelectorAll('.row-check').forEach(function(cb) {
     var row = cb.closest('tr');
     if (row) row.style.background = cb.checked ? '#eef2ff' : '';
@@ -476,10 +545,7 @@ function updateSelection() {
 function deleteSelected() {
   var checked = document.querySelectorAll('.row-check:checked');
   if (checked.length === 0) return;
-
-  var msg = 'Delete ' + checked.length + ' selected vendor' + (checked.length > 1 ? 's' : '') + '? This cannot be undone.';
-  if (!confirm(msg)) return;
-
+  if (!confirm('Delete ' + checked.length + ' selected vendor' + (checked.length > 1 ? 's' : '') + '? This cannot be undone.')) return;
   var ids = Array.from(checked).map(function(cb) { return cb.value; }).join(',');
   document.getElementById('vendor-ids-input').value = ids;
   document.getElementById('bulk-delete-form').submit();
@@ -488,21 +554,21 @@ function deleteSelected() {
 // ── Add / Edit Vendor ─────────────────────────
 function openAddModal() {
   document.getElementById('vendor-modal-title').textContent = 'Add Vendor';
-  ['v-id','v-code','v-name','v-sfx','v-poc','v-phone','v-email',
+  ['v-id','v-code','v-name','v-sfx','v-poc','v-phone','v-email','v-email2',
    'v-state','v-city','v-fleet','v-type','v-date','v-info',
    'v-rem1','v-rem2','v-kyc'].forEach(function(id){
     var el = document.getElementById(id);
-    if(el) el.value = '';
+    if (el) el.value = '';
   });
   document.getElementById('v-status').value  = '';
-  document.getElementById('v-region').value  = '';
   document.getElementById('v-working').value = '';
+  setRegionCheckboxes('');
   openModal('vendor-modal');
 }
 
-function openEditModal(id,status,code,name,sfx,poc,phone,email,
-                       region,state,city,fleet,type_,date_,working,
-                       rem1,rem2,kyc,info) {
+function openEditModal(id, status, code, name, sfx, poc, phone, email, email2,
+                       region, state, city, fleet, type_, date_, working,
+                       rem1, rem2, kyc, info) {
   document.getElementById('vendor-modal-title').textContent = 'Edit — ' + name;
   document.getElementById('v-id').value      = id;
   document.getElementById('v-status').value  = status  || '';
@@ -512,7 +578,7 @@ function openEditModal(id,status,code,name,sfx,poc,phone,email,
   document.getElementById('v-poc').value     = poc     || '';
   document.getElementById('v-phone').value   = phone   || '';
   document.getElementById('v-email').value   = email   || '';
-  document.getElementById('v-region').value  = region  || '';
+  document.getElementById('v-email2').value  = email2  || '';
   document.getElementById('v-state').value   = state   || '';
   document.getElementById('v-city').value    = city    || '';
   document.getElementById('v-fleet').value   = fleet   || '';
@@ -523,22 +589,23 @@ function openEditModal(id,status,code,name,sfx,poc,phone,email,
   document.getElementById('v-rem2').value    = rem2    || '';
   document.getElementById('v-kyc').value     = kyc     || '';
   document.getElementById('v-info').value    = info    || '';
+  setRegionCheckboxes(region || '');
   openModal('vendor-modal');
 }
 
-// Show loading spinner on import
+// Show loading on import
 var importForm = document.querySelector('#import-modal form');
-if(importForm) {
+if (importForm) {
   importForm.addEventListener('submit', function(){
     var btn = document.getElementById('import-btn');
-    if(btn){ btn.textContent = '⏳ Importing... please wait'; btn.disabled = true; }
+    if (btn) { btn.textContent = '⏳ Importing... please wait'; btn.disabled = true; }
   });
 }
 </script>
+
 <!-- Hidden form for bulk delete -->
 <form method="POST" action="{{ url_for('vendors.bulk_delete_vendors') }}" id="bulk-delete-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="vendor_ids" id="vendor-ids-input"/>
 </form>
-
 {% endblock %}
